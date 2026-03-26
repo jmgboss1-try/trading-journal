@@ -199,7 +199,6 @@ function getFirebaseServices(config) {
 function computeStats(entries) {
   const finished = entries.filter((e) => e.status === "종료" && e.pnl !== "" && Number.isFinite(Number(e.pnl)));
   const wins = finished.filter((e) => Number(e.pnl) > 0);
-  const losses = finished.filter((e) => Number(e.pnl) < 0);
   const total = finished.length;
   const net = finished.reduce((sum, e) => sum + Number(e.pnl), 0);
   const rrItems = finished.filter((e) => e.riskReward && Number.isFinite(Number(e.riskReward)));
@@ -217,75 +216,79 @@ function queryStringNormalize(value) {
 }
 
 function Card({ children, className = "" }) {
-  return <div className={`rounded-[28px] border border-white/6 bg-white/[0.04] shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl ${className}`}>{children}</div>;
+  return <div className={`card ${className}`}>{children}</div>;
 }
-function Button({ children, className = "", variant = "primary", ...props }) {
-  const base = "inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-cyan-400/40 disabled:opacity-50";
-  const style = variant === "outline" ? "border border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.06]" : "bg-cyan-400 text-slate-950 hover:bg-cyan-300 shadow-lg shadow-cyan-950/30";
-  return <button className={`${base} ${style} ${className}`} {...props}>{children}</button>;
+
+function Button({ children, variant = "primary", className = "", ...props }) {
+  return (
+    <button className={`btn btn-${variant} ${className}`} {...props}>
+      {children}
+    </button>
+  );
 }
+
 function Input(props) {
-  return <input className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20" {...props} />;
+  return <input className="control" {...props} />;
 }
+
+function Select(props) {
+  return <select className="control" {...props} />;
+}
+
 function Textarea(props) {
-  return <textarea className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20" {...props} />;
+  return <textarea className="control textarea" {...props} />;
 }
+
 function Field({ label, children }) {
-  return <label><span className="mb-1 block text-sm font-medium text-slate-300">{label}</span>{children}</label>;
+  return (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      {children}
+    </label>
+  );
 }
+
 function StatCard({ title, value }) {
   return (
-    <div className="rounded-2xl border border-white/6 bg-black/20 p-4">
-      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{title}</div>
-      <div className="mt-2 text-xl font-semibold text-slate-50">{value}</div>
+    <div className="stat-card">
+      <div className="stat-title">{title}</div>
+      <div className="stat-value">{value}</div>
     </div>
+  );
+}
+
+function MetricCard({ label, value, tone = "cyan" }) {
+  return (
+    <div className={`metric-card metric-${tone}`}>
+      <div className="metric-label">{label}</div>
+      <div className="metric-value">{value}</div>
+    </div>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <section className="section-card">
+      <div className="section-title">{title}</div>
+      {children}
+    </section>
   );
 }
 
 function ListItem({ entry, selected, onClick }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full rounded-2xl border p-3 text-left transition ${selected ? "border-cyan-400/60 bg-cyan-400/10 shadow-lg shadow-cyan-950/20" : "border-white/6 bg-black/15 hover:bg-white/[0.04]"}`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <div className="font-medium text-slate-100">{entry.market}</div>
-        <div className="text-[11px] text-slate-500">{entry.date}</div>
+    <button type="button" onClick={onClick} className={`list-item ${selected ? "list-item-selected" : ""}`}>
+      <div className="list-item-top">
+        <div className="list-item-market">{entry.market}</div>
+        <div className="list-item-date">{entry.date}</div>
       </div>
-      <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400">
-        <span className="rounded-full bg-white/[0.04] px-2 py-1">{entry.category}</span>
-        <span className="rounded-full bg-white/[0.04] px-2 py-1">{entry.side}</span>
-        <span className="rounded-full bg-white/[0.04] px-2 py-1">{entry.status}</span>
+      <div className="list-item-badges">
+        <span className="badge">{entry.category}</span>
+        <span className="badge">{entry.side}</span>
+        <span className="badge">{entry.status}</span>
       </div>
-      <div className="mt-2 text-sm text-slate-300">{entry.pnl ? `${entry.pnl}%` : "미청산"}</div>
+      <div className="list-item-pnl">{entry.pnl ? `${entry.pnl}%` : "미청산"}</div>
     </button>
-  );
-}
-
-function MetricCard({ label, value, tone = "cyan" }) {
-  const tones = {
-    cyan: "border-cyan-500/20 bg-cyan-500/10 text-cyan-200",
-    rose: "border-rose-500/20 bg-rose-500/10 text-rose-200",
-    violet: "border-violet-500/20 bg-violet-500/10 text-violet-200",
-  };
-
-  return (
-    <div className={`rounded-2xl border p-4 ${tones[tone] || tones.cyan}`}>
-      <div className="text-xs opacity-80">{label}</div>
-      <div className="mt-1 text-lg font-semibold">{value}</div>
-    </div>
-  );
-}
-function Section({ title, children, action = null }) {
-  return (
-    <section className="rounded-[26px] border border-white/6 bg-black/15 p-4 md:p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="text-lg font-medium text-slate-100">{title}</h3>
-        {action}
-      </div>
-      {children}
-    </section>
   );
 }
 
@@ -517,161 +520,537 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.12),_transparent_28%),linear-gradient(180deg,#020617_0%,#0b1120_45%,#111827_100%)] text-white">
-      <header className="sticky top-0 z-20 border-b border-white/5 bg-slate-950/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-cyan-200">📈 Trading Journal A</h1>
-            <p className="text-sm text-slate-400">{syncMessage}</p>
+    <>
+      <style>{`
+        * { box-sizing: border-box; }
+        html, body, #root { margin: 0; min-height: 100%; }
+        body {
+          font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          color: #e2e8f0;
+          background: radial-gradient(circle at top, rgba(34,211,238,0.12), transparent 26%), linear-gradient(180deg, #020617 0%, #0b1120 44%, #111827 100%);
+        }
+        a { color: inherit; }
+        .app-shell {
+          min-height: 100vh;
+        }
+        .topbar {
+          position: sticky;
+          top: 0;
+          z-index: 30;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          background: rgba(2,6,23,0.8);
+          backdrop-filter: blur(18px);
+        }
+        .topbar-inner, .page {
+          max-width: 1280px;
+          margin: 0 auto;
+        }
+        .topbar-inner {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          padding: 16px;
+        }
+        .brand-title {
+          margin: 0;
+          font-size: 34px;
+          line-height: 1.05;
+          font-weight: 700;
+          letter-spacing: -0.04em;
+          color: #e0f2fe;
+        }
+        .brand-sub {
+          margin-top: 8px;
+          font-size: 14px;
+          color: #94a3b8;
+        }
+        .topbar-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .page {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 20px;
+          padding: 20px 16px 36px;
+        }
+        .card {
+          border: 1px solid rgba(255,255,255,0.07);
+          background: rgba(255,255,255,0.04);
+          border-radius: 28px;
+          box-shadow: 0 18px 60px rgba(0,0,0,0.32);
+          backdrop-filter: blur(18px);
+        }
+        .sidebar {
+          display: grid;
+          gap: 16px;
+        }
+        .sidebar, .content {
+          min-width: 0;
+        }
+        .card-pad {
+          padding: 18px;
+        }
+        .stats-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .stat-card {
+          border-radius: 20px;
+          border: 1px solid rgba(255,255,255,0.06);
+          background: rgba(0,0,0,0.18);
+          padding: 16px;
+        }
+        .stat-title {
+          font-size: 11px;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.18em;
+        }
+        .stat-value {
+          margin-top: 8px;
+          font-size: 24px;
+          font-weight: 700;
+          color: #f8fafc;
+        }
+        .btn {
+          appearance: none;
+          border: 0;
+          border-radius: 18px;
+          cursor: pointer;
+          padding: 11px 16px;
+          font-size: 14px;
+          font-weight: 600;
+          transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+        }
+        .btn:hover { transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+        .btn-primary {
+          background: #22d3ee;
+          color: #04111f;
+          box-shadow: 0 10px 30px rgba(34, 211, 238, 0.2);
+        }
+        .btn-outline {
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.1);
+          color: #e2e8f0;
+        }
+        .list-title, .section-title {
+          font-size: 18px;
+          font-weight: 700;
+          color: #f8fafc;
+          margin-bottom: 14px;
+        }
+        .list-controls {
+          display: grid;
+          gap: 12px;
+        }
+        .chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .chip {
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.04);
+          color: #cbd5e1;
+          padding: 8px 12px;
+          border-radius: 999px;
+          font-size: 12px;
+          cursor: pointer;
+        }
+        .chip-active {
+          background: #22d3ee;
+          color: #04111f;
+          border-color: transparent;
+        }
+        .list-scroll {
+          display: grid;
+          gap: 10px;
+          max-height: 52vh;
+          overflow: auto;
+          padding-right: 4px;
+        }
+        .list-item {
+          width: 100%;
+          text-align: left;
+          border-radius: 20px;
+          border: 1px solid rgba(255,255,255,0.06);
+          background: rgba(0,0,0,0.14);
+          color: inherit;
+          padding: 14px;
+          cursor: pointer;
+          transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+        }
+        .list-item:hover { transform: translateY(-1px); background: rgba(255,255,255,0.05); }
+        .list-item-selected {
+          border-color: rgba(34, 211, 238, 0.5);
+          background: rgba(34, 211, 238, 0.1);
+          box-shadow: 0 12px 32px rgba(8, 47, 73, 0.35);
+        }
+        .list-item-top {
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+        }
+        .list-item-market { font-size: 16px; font-weight: 700; color: #f8fafc; }
+        .list-item-date { font-size: 12px; color: #64748b; }
+        .list-item-badges {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-top: 10px;
+        }
+        .badge {
+          border-radius: 999px;
+          padding: 5px 9px;
+          font-size: 11px;
+          color: #94a3b8;
+          background: rgba(255,255,255,0.05);
+        }
+        .list-item-pnl {
+          margin-top: 10px;
+          font-size: 14px;
+          color: #cbd5e1;
+        }
+        .empty-box {
+          border: 1px dashed rgba(255,255,255,0.14);
+          border-radius: 18px;
+          padding: 16px;
+          color: #94a3b8;
+          font-size: 14px;
+          text-align: center;
+        }
+        .muted-box {
+          border-radius: 18px;
+          background: rgba(245, 158, 11, 0.12);
+          color: #fcd34d;
+          padding: 12px 14px;
+          font-size: 14px;
+        }
+        .content-card {
+          padding: 20px;
+        }
+        .content-head {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          margin-bottom: 20px;
+        }
+        .content-title {
+          font-size: 30px;
+          line-height: 1.05;
+          letter-spacing: -0.04em;
+          font-weight: 700;
+          color: #f8fafc;
+        }
+        .content-sub {
+          margin-top: 8px;
+          color: #94a3b8;
+          font-size: 14px;
+        }
+        .content-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .main-grid {
+          display: grid;
+          gap: 18px;
+          grid-template-columns: 1fr;
+        }
+        .left-stack, .right-stack {
+          display: grid;
+          gap: 18px;
+          min-width: 0;
+        }
+        .two-col {
+          display: grid;
+          gap: 18px;
+          grid-template-columns: 1fr;
+        }
+        .section-card {
+          border-radius: 24px;
+          border: 1px solid rgba(255,255,255,0.06);
+          background: rgba(0,0,0,0.16);
+          padding: 18px;
+        }
+        .section-title {
+          margin: 0 0 14px;
+        }
+        .form-grid {
+          display: grid;
+          gap: 12px;
+          grid-template-columns: 1fr;
+        }
+        .field { display: block; }
+        .field-label {
+          display: block;
+          margin-bottom: 6px;
+          font-size: 13px;
+          font-weight: 600;
+          color: #cbd5e1;
+        }
+        .control {
+          width: 100%;
+          border-radius: 18px;
+          border: 1px solid rgba(255,255,255,0.12);
+          background: rgba(2, 6, 23, 0.55);
+          color: #f8fafc;
+          padding: 12px 14px;
+          font-size: 14px;
+          outline: none;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+        .control:focus {
+          border-color: rgba(34, 211, 238, 0.8);
+          box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18);
+          background: rgba(2, 6, 23, 0.72);
+        }
+        .control::placeholder { color: #64748b; }
+        .textarea { min-height: 140px; resize: vertical; }
+        .metrics-grid {
+          display: grid;
+          gap: 12px;
+          grid-template-columns: 1fr;
+          margin-top: 12px;
+        }
+        .metric-card {
+          border-radius: 20px;
+          padding: 14px 16px;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.04);
+        }
+        .metric-cyan { background: rgba(34,211,238,0.08); border-color: rgba(34,211,238,0.16); }
+        .metric-rose { background: rgba(244,63,94,0.08); border-color: rgba(244,63,94,0.16); }
+        .metric-violet { background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.16); }
+        .metric-label { font-size: 12px; color: #94a3b8; }
+        .metric-value { margin-top: 6px; font-size: 22px; font-weight: 700; color: #f8fafc; }
+        .iframe-wrap {
+          overflow: hidden;
+          border-radius: 18px;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(2,6,23,0.4);
+        }
+        .tv-frame { width: 100%; height: 260px; border: 0; }
+        .tv-link {
+          display: inline-block;
+          margin-top: 4px;
+          color: #67e8f9;
+          text-decoration: underline;
+          text-underline-offset: 4px;
+          font-size: 14px;
+        }
+        .upload-box {
+          min-height: 168px;
+          border-radius: 20px;
+          border: 1px dashed rgba(255,255,255,0.16);
+          background: rgba(2,6,23,0.3);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          cursor: pointer;
+          padding: 16px;
+          color: #cbd5e1;
+        }
+        .upload-emoji { font-size: 30px; margin-bottom: 8px; }
+        .upload-sub { margin-top: 4px; font-size: 12px; color: #94a3b8; }
+        .screenshot {
+          width: 100%;
+          max-height: 260px;
+          object-fit: contain;
+          border-radius: 18px;
+          display: block;
+          margin-top: 12px;
+        }
+        .file-error { margin-top: 10px; color: #fda4af; font-size: 13px; }
+        .config-card { padding: 18px; margin: 18px auto 0; max-width: 1280px; }
+        .config-title { font-size: 20px; font-weight: 700; color: #ddd6fe; margin-bottom: 14px; }
+        .config-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+        .config-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+
+        @media (min-width: 720px) {
+          .topbar-inner { flex-direction: row; align-items: center; justify-content: space-between; }
+          .content-head { flex-direction: row; align-items: center; justify-content: space-between; }
+          .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .config-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (min-width: 1100px) {
+          .page { grid-template-columns: 320px minmax(0, 1fr); }
+          .sidebar {
+            position: sticky;
+            top: 96px;
+            align-self: start;
+          }
+          .main-grid { grid-template-columns: minmax(0, 1fr) 320px; }
+        }
+
+        @media (min-width: 1320px) {
+          .config-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+      `}</style>
+
+      <div className="app-shell">
+        <header className="topbar">
+          <div className="topbar-inner">
+            <div>
+              <h1 className="brand-title">📈 Trading Journal A</h1>
+              <div className="brand-sub">{syncMessage}</div>
+            </div>
+            <div className="topbar-actions">
+              <Button variant="outline" onClick={() => setConfigOpen((prev) => !prev)}>Firebase 설정</Button>
+              {user ? <Button variant="outline" onClick={signOutGoogle}>로그아웃</Button> : <Button onClick={signInWithGoogle} disabled={!authReady}>Google 로그인</Button>}
+              <Button onClick={newEntry}>+ 새 기록</Button>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setConfigOpen((prev) => !prev)}>Firebase 설정</Button>
-            {user ? <Button variant="outline" onClick={signOutGoogle}>로그아웃</Button> : <Button onClick={signInWithGoogle} disabled={!authReady}>Google 로그인</Button>}
-            <Button onClick={newEntry}>+ 새 기록</Button>
+        </header>
+
+        {configOpen ? (
+          <div className="config-card">
+            <Card className="card-pad">
+              <div className="config-title">Firebase 설정</div>
+              <div className="config-grid">
+                <Field label="apiKey"><Input value={firebaseConfig.apiKey} onChange={(e) => handleConfigField("apiKey", e.target.value)} /></Field>
+                <Field label="authDomain"><Input value={firebaseConfig.authDomain} onChange={(e) => handleConfigField("authDomain", e.target.value)} /></Field>
+                <Field label="projectId"><Input value={firebaseConfig.projectId} onChange={(e) => handleConfigField("projectId", e.target.value)} /></Field>
+                <Field label="storageBucket"><Input value={firebaseConfig.storageBucket} onChange={(e) => handleConfigField("storageBucket", e.target.value)} /></Field>
+                <Field label="messagingSenderId"><Input value={firebaseConfig.messagingSenderId} onChange={(e) => handleConfigField("messagingSenderId", e.target.value)} /></Field>
+                <Field label="appId"><Input value={firebaseConfig.appId} onChange={(e) => handleConfigField("appId", e.target.value)} /></Field>
+              </div>
+              <div className="config-actions">
+                <Button onClick={applyFirebaseConfig}>설정 저장</Button>
+                <Button variant="outline" onClick={() => setConfigOpen(false)}>닫기</Button>
+              </div>
+            </Card>
           </div>
-        </div>
-      </header>
+        ) : null}
 
-      {configOpen ? (
-        <div className="mx-auto mt-4 max-w-7xl px-4">
-          <Card className="p-4 md:p-5">
-            <div className="mb-4 text-lg font-semibold text-violet-200">Firebase 설정</div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <Field label="apiKey"><Input value={firebaseConfig.apiKey} onChange={(e) => handleConfigField("apiKey", e.target.value)} /></Field>
-              <Field label="authDomain"><Input value={firebaseConfig.authDomain} onChange={(e) => handleConfigField("authDomain", e.target.value)} /></Field>
-              <Field label="projectId"><Input value={firebaseConfig.projectId} onChange={(e) => handleConfigField("projectId", e.target.value)} /></Field>
-              <Field label="storageBucket"><Input value={firebaseConfig.storageBucket} onChange={(e) => handleConfigField("storageBucket", e.target.value)} /></Field>
-              <Field label="messagingSenderId"><Input value={firebaseConfig.messagingSenderId} onChange={(e) => handleConfigField("messagingSenderId", e.target.value)} /></Field>
-              <Field label="appId"><Input value={firebaseConfig.appId} onChange={(e) => handleConfigField("appId", e.target.value)} /></Field>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <Button onClick={applyFirebaseConfig}>설정 저장</Button>
-              <Button variant="outline" onClick={() => setConfigOpen(false)}>닫기</Button>
-            </div>
-          </Card>
-        </div>
-      ) : null}
-
-      <div className="mx-auto grid max-w-7xl gap-4 p-4 md:p-5 xl:grid-cols-[320px,minmax(0,1fr)]">
-        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
-          <Card className="p-4">
-            <div className="grid grid-cols-2 gap-3">
-              <StatCard title="총 매매" value={stats.total} />
-              <StatCard title="승률" value={`${stats.winRate.toFixed(1)}%`} />
-              <StatCard title="평균 손익" value={formatSigned(stats.avg)} />
-              <StatCard title="평균 RR" value={stats.avgRR ? stats.avgRR.toFixed(2) : "0.00"} />
-            </div>
-          </Card>
-
-          <Card className="p-4">
-            <div className="mb-3 text-sm font-semibold text-slate-200">기록 리스트</div>
-            <div className="grid gap-3">
-              <Input value={queryText} onChange={(e) => setQueryText(e.target.value)} placeholder="검색" />
-              <div className="flex flex-wrap gap-2">
-                {["전체", ...assetCategories].map((item) => (
-                  <button key={item} type="button" onClick={() => setCategoryFilter(item)} className={`rounded-full px-3 py-1.5 text-xs ${categoryFilter === item ? "bg-cyan-400 text-slate-950" : "bg-slate-800 text-slate-300"}`}>
-                    {item}
-                  </button>
-                ))}
+        <div className="page">
+          <aside className="sidebar">
+            <Card className="card-pad">
+              <div className="stats-grid">
+                <StatCard title="총 매매" value={stats.total} />
+                <StatCard title="승률" value={`${stats.winRate.toFixed(1)}%`} />
+                <StatCard title="평균 손익" value={formatSigned(stats.avg)} />
+                <StatCard title="평균 RR" value={stats.avgRR ? stats.avgRR.toFixed(2) : "0.00"} />
               </div>
-              {loadError ? <div className="rounded-2xl bg-amber-500/10 px-3 py-2 text-sm text-amber-200">{loadError}</div> : null}
-              <div className="max-h-[50vh] space-y-2 overflow-auto pr-1">
-                {filteredEntries.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">기록이 없습니다.</div> : null}
-                {filteredEntries.map((entry) => (
-                  <ListItem key={entry.id} entry={entry} selected={selectedId === entry.id} onClick={() => selectEntry(entry.id)} />
-                ))}
-              </div>
-            </div>
-          </Card>
-        </aside>
+            </Card>
 
-        <main className="space-y-4 min-w-0">
-          <Card className="p-4 md:p-5">
-            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="text-2xl font-semibold tracking-tight text-slate-50">기록 상세 / 입력</div>
-                <div className="text-sm text-slate-400">노션 + 트레이딩뷰 느낌의 개인용 저널. 빠르게 기록하고, 나중에 B버전으로 확장 가능한 구조.</div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => deleteEntry(form.id)} disabled={!form.id}>삭제</Button>
-                <Button onClick={saveEntry} disabled={isSavingCloud}>{isSavingCloud ? "저장 중..." : "저장"}</Button>
-              </div>
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),320px]">
-              <div className="space-y-4">
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <Section title="기본 정보">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <Field label="날짜"><Input type="date" value={form.date} onChange={(e) => updateForm("date", e.target.value)} /></Field>
-                      <Field label="자산군"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none" value={form.category} onChange={(e) => updateForm("category", e.target.value)}>{assetCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select></Field>
-                      <Field label="종목"><Input value={form.market} onChange={(e) => updateForm("market", e.target.value)} placeholder="BTCUSDT / 005930 / AAPL" /></Field>
-                      <Field label="방향"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none" value={form.side} onChange={(e) => updateForm("side", e.target.value)}><option value="Long">Long</option><option value="Short">Short</option></select></Field>
-                      <Field label="셋업"><Input value={form.setup} onChange={(e) => updateForm("setup", e.target.value)} /></Field>
-                      <Field label="타임프레임"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none" value={form.timeframe} onChange={(e) => updateForm("timeframe", e.target.value)}><option value="5M">5M</option><option value="15M">15M</option><option value="1H">1H</option><option value="4H">4H</option><option value="1D">1D</option></select></Field>
-                      <Field label="상태"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none" value={form.status} onChange={(e) => updateForm("status", e.target.value)}><option value="대기">대기</option><option value="진행중">진행중</option><option value="종료">종료</option></select></Field>
-                      <Field label="태그"><Input value={form.tags} onChange={(e) => updateForm("tags", e.target.value)} placeholder="예: 눌림목, FVG" /></Field>
-                    </div>
-                  </Section>
-
-                  <Section title="가격 / 계산">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <Field label="진입가"><Input value={form.entryPrice} onChange={(e) => updateForm("entryPrice", e.target.value)} /></Field>
-                      <Field label="손절가"><Input value={form.stopPrice} onChange={(e) => updateForm("stopPrice", e.target.value)} /></Field>
-                      <Field label="목표가"><Input value={form.targetPrice} onChange={(e) => updateForm("targetPrice", e.target.value)} /></Field>
-                      <Field label="청산가"><Input value={form.exitPrice} onChange={(e) => updateForm("exitPrice", e.target.value)} /></Field>
-                      <Field label="수익률(%)"><Input value={form.pnl} onChange={(e) => updateForm("pnl", e.target.value)} /></Field>
-                    </div>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                      <MetricCard label="리스크" value={form.riskPct ? `${form.riskPct}%` : "-"} tone="rose" />
-                      <MetricCard label="리워드" value={form.rewardPct ? `${form.rewardPct}%` : "-"} tone="cyan" />
-                      <MetricCard label="RR" value={form.riskReward ? `1:${form.riskReward}` : "-"} tone="violet" />
-                    </div>
-                  </Section>
+            <Card className="card-pad">
+              <div className="list-title">기록 리스트</div>
+              <div className="list-controls">
+                <Input value={queryText} onChange={(e) => setQueryText(e.target.value)} placeholder="검색" />
+                <div className="chips">
+                  {["전체", ...assetCategories].map((item) => (
+                    <button key={item} type="button" onClick={() => setCategoryFilter(item)} className={`chip ${categoryFilter === item ? "chip-active" : ""}`}>
+                      {item}
+                    </button>
+                  ))}
                 </div>
+                {loadError ? <div className="muted-box">{loadError}</div> : null}
+                <div className="list-scroll">
+                  {filteredEntries.length === 0 ? <div className="empty-box">기록이 없습니다.</div> : null}
+                  {filteredEntries.map((entry) => (
+                    <ListItem key={entry.id} entry={entry} selected={selectedId === entry.id} onClick={() => selectEntry(entry.id)} />
+                  ))}
+                </div>
+              </div>
+            </Card>
+          </aside>
 
-                <div className="grid gap-4 lg:grid-cols-[1fr,1fr]">
-                  <Section title="진입 메모">
-                    <div className="grid gap-3">
-                      <Field label="진입 근거"><Textarea rows={5} value={form.thesis} onChange={(e) => updateForm("thesis", e.target.value)} placeholder="왜 들어갔는지 적기" /></Field>
-                      <Field label="추가 메모"><Textarea rows={5} value={form.note} onChange={(e) => updateForm("note", e.target.value)} placeholder="심리, 시나리오, 외부 변수" /></Field>
-                    </div>
-                  </Section>
-
-                  <Section title="복기">
-                    <Field label="복기 메모"><Textarea rows={11} value={form.review} onChange={(e) => updateForm("review", e.target.value)} placeholder="결과, 실수, 배운 점" /></Field>
-                  </Section>
+          <main className="content">
+            <Card className="content-card">
+              <div className="content-head">
+                <div>
+                  <div className="content-title">기록 상세 / 입력</div>
+                  <div className="content-sub">노션 + 트레이딩뷰 느낌의 개인용 저널. 빠르게 기록하고, 나중에 B버전으로 확장 가능한 구조.</div>
+                </div>
+                <div className="content-actions">
+                  <Button variant="outline" onClick={() => deleteEntry(form.id)} disabled={!form.id}>삭제</Button>
+                  <Button onClick={saveEntry} disabled={isSavingCloud}>{isSavingCloud ? "저장 중..." : "저장"}</Button>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <Section title="TradingView">
-                  <div className="space-y-3">
-                    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
-                      <iframe title="TradingView" src={tvEmbedUrl} className="h-[260px] w-full border-0" />
-                    </div>
-                    <Field label="TradingView 링크"><Input value={form.tvLink} onChange={(e) => updateForm("tvLink", e.target.value)} placeholder="붙여넣으면 우선 사용" /></Field>
-                    <a href={tvOpenUrl} target="_blank" rel="noreferrer" className="inline-block text-sm text-cyan-300 underline underline-offset-4">새 탭에서 TradingView 열기</a>
+              <div className="main-grid">
+                <div className="left-stack">
+                  <div className="two-col">
+                    <Section title="기본 정보">
+                      <div className="form-grid">
+                        <Field label="날짜"><Input type="date" value={form.date} onChange={(e) => updateForm("date", e.target.value)} /></Field>
+                        <Field label="자산군"><Select value={form.category} onChange={(e) => updateForm("category", e.target.value)}>{assetCategories.map((category) => <option key={category} value={category}>{category}</option>)}</Select></Field>
+                        <Field label="종목"><Input value={form.market} onChange={(e) => updateForm("market", e.target.value)} placeholder="BTCUSDT / 005930 / AAPL" /></Field>
+                        <Field label="방향"><Select value={form.side} onChange={(e) => updateForm("side", e.target.value)}><option value="Long">Long</option><option value="Short">Short</option></Select></Field>
+                        <Field label="셋업"><Input value={form.setup} onChange={(e) => updateForm("setup", e.target.value)} /></Field>
+                        <Field label="타임프레임"><Select value={form.timeframe} onChange={(e) => updateForm("timeframe", e.target.value)}><option value="5M">5M</option><option value="15M">15M</option><option value="1H">1H</option><option value="4H">4H</option><option value="1D">1D</option></Select></Field>
+                        <Field label="상태"><Select value={form.status} onChange={(e) => updateForm("status", e.target.value)}><option value="대기">대기</option><option value="진행중">진행중</option><option value="종료">종료</option></Select></Field>
+                        <Field label="태그"><Input value={form.tags} onChange={(e) => updateForm("tags", e.target.value)} placeholder="예: 눌림목, FVG" /></Field>
+                      </div>
+                    </Section>
+
+                    <Section title="가격 / 계산">
+                      <div className="form-grid">
+                        <Field label="진입가"><Input value={form.entryPrice} onChange={(e) => updateForm("entryPrice", e.target.value)} /></Field>
+                        <Field label="손절가"><Input value={form.stopPrice} onChange={(e) => updateForm("stopPrice", e.target.value)} /></Field>
+                        <Field label="목표가"><Input value={form.targetPrice} onChange={(e) => updateForm("targetPrice", e.target.value)} /></Field>
+                        <Field label="청산가"><Input value={form.exitPrice} onChange={(e) => updateForm("exitPrice", e.target.value)} /></Field>
+                        <Field label="수익률(%)"><Input value={form.pnl} onChange={(e) => updateForm("pnl", e.target.value)} /></Field>
+                      </div>
+                      <div className="metrics-grid">
+                        <MetricCard label="리스크" value={form.riskPct ? `${form.riskPct}%` : "-"} tone="rose" />
+                        <MetricCard label="리워드" value={form.rewardPct ? `${form.rewardPct}%` : "-"} tone="cyan" />
+                        <MetricCard label="RR" value={form.riskReward ? `1:${form.riskReward}` : "-"} tone="violet" />
+                      </div>
+                    </Section>
                   </div>
-                </Section>
 
-                <Section title="스크린샷">
-                  <div className="space-y-3">
-                    <label className="flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-4 text-center">
-                      <span className="mb-2 text-3xl">📷</span>
-                      <span className="text-sm text-slate-200">차트 스크린샷 업로드</span>
-                      <span className="mt-1 text-xs text-slate-400">로그인 상태면 클라우드 저장</span>
-                      <input type="file" accept="image/*" className="hidden" onChange={handleScreenshotChange} />
+                  <div className="two-col">
+                    <Section title="진입 메모">
+                      <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
+                        <Field label="진입 근거"><Textarea rows={5} value={form.thesis} onChange={(e) => updateForm("thesis", e.target.value)} placeholder="왜 들어갔는지 적기" /></Field>
+                        <Field label="추가 메모"><Textarea rows={5} value={form.note} onChange={(e) => updateForm("note", e.target.value)} placeholder="심리, 시나리오, 외부 변수" /></Field>
+                      </div>
+                    </Section>
+
+                    <Section title="복기">
+                      <Field label="복기 메모"><Textarea rows={11} value={form.review} onChange={(e) => updateForm("review", e.target.value)} placeholder="결과, 실수, 배운 점" /></Field>
+                    </Section>
+                  </div>
+                </div>
+
+                <div className="right-stack">
+                  <Section title="TradingView">
+                    <div className="iframe-wrap">
+                      <iframe title="TradingView" src={tvEmbedUrl} className="tv-frame" />
+                    </div>
+                    <div style={{ marginTop: 12 }}>
+                      <Field label="TradingView 링크"><Input value={form.tvLink} onChange={(e) => updateForm("tvLink", e.target.value)} placeholder="붙여넣으면 우선 사용" /></Field>
+                      <a href={tvOpenUrl} target="_blank" rel="noreferrer" className="tv-link">새 탭에서 TradingView 열기</a>
+                    </div>
+                  </Section>
+
+                  <Section title="스크린샷">
+                    <label className="upload-box">
+                      <div className="upload-emoji">📷</div>
+                      <div>차트 스크린샷 업로드</div>
+                      <div className="upload-sub">로그인 상태면 클라우드 저장</div>
+                      <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleScreenshotChange} />
                     </label>
-                    {form.screenshot ? <img src={form.screenshot} alt="trade screenshot" className="max-h-[240px] w-full rounded-2xl object-contain" /> : <div className="rounded-2xl bg-slate-900/60 p-4 text-center text-sm text-slate-400">스크린샷 없음</div>}
-                    {fileError ? <div className="text-sm text-rose-300">{fileError}</div> : null}
-                  </div>
-                </Section>
+                    {form.screenshot ? <img src={form.screenshot} alt="trade screenshot" className="screenshot" /> : <div className="empty-box" style={{ marginTop: 12 }}>스크린샷 없음</div>}
+                    {fileError ? <div className="file-error">{fileError}</div> : null}
+                  </Section>
+                </div>
               </div>
-            </div>
-          </Card>
-        </main>
+            </Card>
+          </main>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
