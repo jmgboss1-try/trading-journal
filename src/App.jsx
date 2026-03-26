@@ -18,10 +18,15 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { getDownloadURL, getStorage, ref, uploadString } from "firebase/storage";
+import {
+  getDownloadURL,
+  getStorage,
+  ref,
+  uploadString,
+} from "firebase/storage";
 
 const assetCategories = ["BTC", "알트", "국내주식", "해외주식"];
-const storageKey = "tv-journal-app-v5-local";
+const storageKey = "trading-journal-a-local";
 const firebaseConfigKey = "tv-journal-firebase-config";
 
 function getToday() {
@@ -29,9 +34,8 @@ function getToday() {
 }
 
 function createId() {
-  if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
+  if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID)
     return globalThis.crypto.randomUUID();
-  }
   return `entry-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
@@ -53,18 +57,11 @@ function createDefaultEntry() {
     riskPct: "",
     rewardPct: "",
     status: "대기",
-    stochastic: "과매도",
-    marketCondition: "횡보",
-    externalFlow: "나스닥 동조",
     thesis: "",
-    scenarioA: "",
-    scenarioB: "",
-    executionNote: "",
-    resultReview: "",
-    mistake: "",
-    lesson: "",
-    tvLink: "",
+    note: "",
+    review: "",
     screenshot: "",
+    tvLink: "",
     tags: "",
     updatedAt: Date.now(),
   };
@@ -96,8 +93,7 @@ function loadFirebaseConfig() {
   try {
     const raw = localStorage.getItem(firebaseConfigKey);
     if (!raw) return createFirebaseConfigForm();
-    const parsed = JSON.parse(raw);
-    return createFirebaseConfigForm(parsed);
+    return createFirebaseConfigForm(JSON.parse(raw));
   } catch {
     return createFirebaseConfigForm();
   }
@@ -107,45 +103,76 @@ function saveFirebaseConfig(config) {
   localStorage.setItem(firebaseConfigKey, JSON.stringify(config));
 }
 
+function safeParseEntries(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function toNum(value) {
   if (value === null || value === undefined) return null;
-  const normalized = String(value).replace(/,/g, "").trim();
-  if (!normalized) return null;
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : null;
+  const text = String(value).replace(/,/g, "").trim();
+  if (!text) return null;
+  const num = Number(text);
+  return Number.isFinite(num) ? num : null;
 }
 
 function calcRate(entryPrice, exitPrice, side) {
-  const en = toNum(entryPrice);
-  const ex = toNum(exitPrice);
-  if (en === null || ex === null || en === 0) return "";
-  const raw = side === "Short" ? ((en - ex) / en) * 100 : ((ex - en) / en) * 100;
+  const entry = toNum(entryPrice);
+  const exit = toNum(exitPrice);
+  if (entry === null || exit === null || entry === 0) return "";
+  const raw =
+    side === "Short"
+      ? ((entry - exit) / entry) * 100
+      : ((exit - entry) / entry) * 100;
   return raw.toFixed(2);
 }
 
 function calcRiskReward(entryPrice, stopPrice, targetPrice, side) {
-  const en = toNum(entryPrice);
-  const st = toNum(stopPrice);
-  const ta = toNum(targetPrice);
-  if (en === null || st === null || ta === null || en === 0) {
+  const entry = toNum(entryPrice);
+  const stop = toNum(stopPrice);
+  const target = toNum(targetPrice);
+  if (entry === null || stop === null || target === null || entry === 0) {
     return { riskPct: "", rewardPct: "", rr: "" };
   }
 
-  const risk = side === "Short" ? ((st - en) / en) * 100 : ((en - st) / en) * 100;
-  const reward = side === "Short" ? ((en - ta) / en) * 100 : ((ta - en) / en) * 100;
-
-  if (risk <= 0 || reward <= 0) {
-    return {
-      riskPct: Number.isFinite(risk) ? risk.toFixed(2) : "",
-      rewardPct: Number.isFinite(reward) ? reward.toFixed(2) : "",
-      rr: "",
-    };
-  }
+  const risk =
+    side === "Short"
+      ? ((stop - entry) / entry) * 100
+      : ((entry - stop) / entry) * 100;
+  const reward =
+    side === "Short"
+      ? ((entry - target) / entry) * 100
+      : ((target - entry) / entry) * 100;
 
   return {
-    riskPct: risk.toFixed(2),
-    rewardPct: reward.toFixed(2),
-    rr: (reward / risk).toFixed(2),
+    riskPct: risk > 0 ? risk.toFixed(2) : "",
+    rewardPct: reward > 0 ? reward.toFixed(2) : "",
+    rr: risk > 0 && reward > 0 ? (reward / risk).toFixed(2) : "",
+  };
+}
+
+function recalculateEntry(entry) {
+  const rr = calcRiskReward(
+    entry.entryPrice,
+    entry.stopPrice,
+    entry.targetPrice,
+    entry.side
+  );
+  const pnl =
+    entry.entryPrice && entry.exitPrice
+      ? calcRate(entry.entryPrice, entry.exitPrice, entry.side)
+      : entry.pnl || "";
+  return {
+    ...entry,
+    pnl,
+    riskPct: rr.riskPct,
+    rewardPct: rr.rewardPct,
+    riskReward: rr.rr,
+    updatedAt: Date.now(),
   };
 }
 
@@ -158,194 +185,136 @@ function formatSigned(value, digits = 2, suffix = "%") {
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-    reader.onerror = () => reject(new Error("파일을 읽는 중 오류가 발생했습니다."));
+    reader.onload = () =>
+      resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(new Error("파일 읽기 실패"));
     reader.readAsDataURL(file);
   });
 }
 
-function recalculateEntry(entry) {
-  const rr = calcRiskReward(entry.entryPrice, entry.stopPrice, entry.targetPrice, entry.side);
-  const pnl = entry.entryPrice && entry.exitPrice ? calcRate(entry.entryPrice, entry.exitPrice, entry.side) : entry.pnl || "";
-  return {
-    ...entry,
-    pnl,
-    riskPct: rr.riskPct,
-    rewardPct: rr.rewardPct,
-    riskReward: rr.rr,
-    updatedAt: Date.now(),
-  };
-}
-
-function computeStats(entries) {
-  const finished = entries.filter((e) => e.status === "종료" && e.pnl !== "" && Number.isFinite(Number(e.pnl)));
-  const wins = finished.filter((e) => Number(e.pnl) > 0);
-  const losses = finished.filter((e) => Number(e.pnl) < 0);
-  const total = finished.length;
-  const grossWin = wins.reduce((sum, e) => sum + Number(e.pnl), 0);
-  const grossLoss = losses.reduce((sum, e) => sum + Number(e.pnl), 0);
-  const totalRRItems = finished.filter((e) => e.riskReward !== "" && Number.isFinite(Number(e.riskReward)));
-
-  return {
-    finished,
-    summary: {
-      total,
-      wins: wins.length,
-      losses: losses.length,
-      avg: total ? finished.reduce((sum, e) => sum + Number(e.pnl), 0) / total : 0,
-      avgLoss: losses.length ? grossLoss / losses.length : 0,
-      avgWin: wins.length ? grossWin / wins.length : 0,
-      net: finished.reduce((sum, e) => sum + Number(e.pnl), 0),
-      winRate: total ? (wins.length / total) * 100 : 0,
-      lossRate: total ? (losses.length / total) * 100 : 0,
-      profitFactor: Math.abs(grossLoss) > 0 ? grossWin / Math.abs(grossLoss) : grossWin > 0 ? Infinity : 0,
-      avgRR: totalRRItems.length ? totalRRItems.reduce((sum, e) => sum + Number(e.riskReward), 0) / totalRRItems.length : 0,
-    },
-  };
-}
-
-function groupByDate(entries) {
-  const map = new Map();
-  entries.forEach((e) => {
-    const key = e.date;
-    const prev = map.get(key) || { date: key, count: 0, win: 0, loss: 0, pnl: 0 };
-    const pnl = Number(e.pnl);
-    prev.count += 1;
-    prev.pnl += pnl;
-    if (pnl > 0) prev.win += 1;
-    if (pnl < 0) prev.loss += 1;
-    map.set(key, prev);
-  });
-  return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
-}
-
-function groupByMonth(entries) {
-  const map = new Map();
-  entries.forEach((e) => {
-    const key = e.date.slice(0, 7);
-    const prev = map.get(key) || { month: key, count: 0, win: 0, loss: 0, pnl: 0 };
-    const pnl = Number(e.pnl);
-    prev.count += 1;
-    prev.pnl += pnl;
-    if (pnl > 0) prev.win += 1;
-    if (pnl < 0) prev.loss += 1;
-    map.set(key, prev);
-  });
-  return Array.from(map.values()).sort((a, b) => b.month.localeCompare(a.month));
-}
-
-function buildCategoryStats(entries) {
-  return assetCategories.map((category) => {
-    const items = entries.filter((e) => e.category === category);
-    return {
-      category,
-      count: items.length,
-      pnl: items.reduce((sum, e) => sum + Number(e.pnl || 0), 0),
-      wins: items.filter((e) => Number(e.pnl) > 0).length,
-      losses: items.filter((e) => Number(e.pnl) < 0).length,
-    };
-  });
-}
-
 function normalizeSymbol(raw, category) {
-  const text = String(raw || "").trim().toUpperCase().replaceAll(" ", "");
+  const text = String(raw || "")
+    .trim()
+    .toUpperCase()
+    .replaceAll(" ", "");
   if (!text) return "BINANCE:BTCUSDT";
   if (text.includes(":")) return text;
   if (category === "국내주식") return `KRX:${text.replace(/\.KS$|\.KQ$/g, "")}`;
   if (category === "해외주식") return `NASDAQ:${text}`;
-  if (category === "알트") return `BINANCE:${text.includes("USDT") ? text : `${text}USDT`}`;
   return `BINANCE:${text.includes("USDT") ? text : `${text}USDT`}`;
 }
 
 function buildTradingViewEmbedUrl(symbol, timeframe) {
-  const intervalMap = { "5M": "5", "15M": "15", "1H": "60", "4H": "240", "1D": "D" };
+  const intervalMap = {
+    "5M": "5",
+    "15M": "15",
+    "1H": "60",
+    "4H": "240",
+    "1D": "D",
+  };
   const interval = intervalMap[timeframe] || "60";
-  const tvSymbol = encodeURIComponent(symbol);
-  return `https://s.tradingview.com/widgetembed/?symbol=${tvSymbol}&interval=${interval}&theme=dark&style=1&timezone=Asia%2FSeoul&withdateranges=1&hide_top_toolbar=0&hide_legend=0&saveimage=1`;
+  return `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(
+    symbol
+  )}&interval=${interval}&theme=dark&style=1&timezone=Asia%2FSeoul&withdateranges=1&hide_top_toolbar=0&hide_legend=0&saveimage=1`;
 }
 
 function buildTradingViewOpenUrl(symbol) {
-  return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}`;
-}
-
-function runSelfTests() {
-  return [
-    { name: "long pnl", ok: calcRate("100", "110", "Long") === "10.00" },
-    { name: "short pnl", ok: calcRate("100", "90", "Short") === "10.00" },
-    { name: "zero entry safe", ok: calcRate("0", "90", "Short") === "" },
-    { name: "rr long", ok: calcRiskReward("100", "95", "110", "Long").rr === "2.00" },
-    { name: "rr short", ok: calcRiskReward("100", "105", "90", "Short").rr === "2.00" },
-    { name: "comma parse", ok: toNum("1,234.5") === 1234.5 },
-    { name: "krx symbol", ok: normalizeSymbol("005930", "국내주식") === "KRX:005930" },
-    { name: "us stock symbol", ok: normalizeSymbol("AAPL", "해외주식") === "NASDAQ:AAPL" },
-  ];
+  return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(
+    symbol
+  )}`;
 }
 
 function getFirebaseServices(config) {
   const app = getApps().length ? getApp() : initializeApp(config);
   return {
-    app,
     auth: getAuth(app),
     db: getFirestore(app),
     storage: getStorage(app),
   };
 }
 
+function computeStats(entries) {
+  const finished = entries.filter(
+    (e) => e.status === "종료" && e.pnl !== "" && Number.isFinite(Number(e.pnl))
+  );
+  const wins = finished.filter((e) => Number(e.pnl) > 0);
+  const losses = finished.filter((e) => Number(e.pnl) < 0);
+  const total = finished.length;
+  const net = finished.reduce((sum, e) => sum + Number(e.pnl), 0);
+  const rrItems = finished.filter(
+    (e) => e.riskReward && Number.isFinite(Number(e.riskReward))
+  );
+  return {
+    total,
+    winRate: total ? (wins.length / total) * 100 : 0,
+    avg: total ? net / total : 0,
+    net,
+    avgRR: rrItems.length
+      ? rrItems.reduce((sum, e) => sum + Number(e.riskReward), 0) /
+        rrItems.length
+      : 0,
+  };
+}
+
+function queryStringNormalize(value) {
+  return String(value || "")
+    .toLowerCase()
+    .trim();
+}
+
 function Card({ children, className = "" }) {
-  return <div className={`rounded-3xl border border-cyan-500/10 bg-slate-950/70 shadow-2xl shadow-cyan-950/20 backdrop-blur ${className}`}>{children}</div>;
-}
-
-function CardHeader({ children, className = "" }) {
-  return <div className={`p-5 md:p-6 ${className}`}>{children}</div>;
-}
-
-function CardTitle({ children, className = "" }) {
-  return <h2 className={`text-xl font-semibold ${className}`}>{children}</h2>;
-}
-
-function CardContent({ children, className = "" }) {
-  return <div className={`px-5 pb-5 md:px-6 md:pb-6 ${className}`}>{children}</div>;
-}
-
-function Button({ children, className = "", variant = "primary", type = "button", ...props }) {
-  const base = "inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-cyan-400/40 disabled:cursor-not-allowed disabled:opacity-50";
-  const styles = variant === "outline" ? "border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" : "bg-cyan-500 text-slate-950 hover:bg-cyan-400";
   return (
-    <button type={type} className={`${base} ${styles} ${className}`} {...props}>
+    <div
+      className={`rounded-3xl border border-cyan-500/10 bg-slate-950/70 shadow-2xl shadow-cyan-950/20 backdrop-blur ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+function Button({ children, className = "", variant = "primary", ...props }) {
+  const base =
+    "inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-cyan-400/40 disabled:opacity-50";
+  const style =
+    variant === "outline"
+      ? "border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+      : "bg-cyan-500 text-slate-950 hover:bg-cyan-400";
+  return (
+    <button className={`${base} ${style} ${className}`} {...props}>
       {children}
     </button>
   );
 }
-
-function Input({ className = "", ...props }) {
-  return <input className={`w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 shadow-sm outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30 ${className}`} {...props} />;
+function Input(props) {
+  return (
+    <input
+      className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30"
+      {...props}
+    />
+  );
 }
-
-function Textarea({ className = "", ...props }) {
-  return <textarea className={`w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 shadow-sm outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30 ${className}`} {...props} />;
+function Textarea(props) {
+  return (
+    <textarea
+      className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30"
+      {...props}
+    />
+  );
 }
-
-function Badge({ children, className = "" }) {
-  return <span className={`inline-flex items-center rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-200 ${className}`}>{children}</span>;
-}
-
 function Field({ label, children }) {
   return (
     <label>
-      <span className="mb-1 block text-sm font-medium text-slate-300">{label}</span>
+      <span className="mb-1 block text-sm font-medium text-slate-300">
+        {label}
+      </span>
       {children}
     </label>
   );
 }
-
-function StatCard({ title, value, emoji }) {
+function StatCard({ title, value }) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
-      <div className="mb-1 flex items-center gap-2 text-xs text-slate-400">
-        <span>{emoji}</span>
-        <span>{title}</span>
-      </div>
-      <div className="text-lg font-semibold text-slate-100">{value}</div>
+      <div className="text-xs text-slate-400">{title}</div>
+      <div className="mt-1 text-lg font-semibold text-slate-100">{value}</div>
     </div>
   );
 }
@@ -356,77 +325,97 @@ function MetricCard({ label, value, tone = "cyan" }) {
     rose: "border-rose-500/20 bg-rose-500/10 text-rose-200",
     violet: "border-violet-500/20 bg-violet-500/10 text-violet-200",
   };
+
   return (
-    <div className={`rounded-2xl border p-4 ${tones[tone]}`}>
+    <div className={`rounded-2xl border p-4 ${tones[tone] || tones.cyan}`}>
       <div className="text-xs opacity-80">{label}</div>
       <div className="mt-1 text-lg font-semibold">{value}</div>
     </div>
   );
 }
-
-function ResponsiveSection({ title, open, onToggle, children }) {
+function Section({ title, children, action = null }) {
   return (
-    <section className="rounded-3xl border border-slate-800 bg-slate-900/40 p-4 md:p-5">
-      <button type="button" onClick={onToggle} className="mb-4 flex w-full items-center justify-between gap-3 text-left">
+    <div className="rounded-3xl border border-slate-800 bg-slate-900/40 p-4 md:p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
-        <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">{open ? "접기" : "펼치기"}</span>
-      </button>
-      {open ? children : null}
-    </section>
+        {action}
+      </div>
+      {children}
+    </div>
   );
 }
 
-export default function TradingJournalApp() {
+export default function App() {
   const [entries, setEntries] = useState([]);
-  const [form, setForm] = useState(createDefaultEntry());
   const [selectedId, setSelectedId] = useState(null);
+  const [form, setForm] = useState(createDefaultEntry());
   const [queryText, setQueryText] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("전체");
-  const [loadError, setLoadError] = useState("");
-  const [fileError, setFileError] = useState("");
-  const [firebaseConfig, setFirebaseConfig] = useState(createFirebaseConfigForm());
+  const [firebaseConfig, setFirebaseConfig] = useState(
+    createFirebaseConfigForm()
+  );
   const [configOpen, setConfigOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [syncMessage, setSyncMessage] = useState("브라우저 저장 모드");
   const [isSavingCloud, setIsSavingCloud] = useState(false);
-  const [openSections, setOpenSections] = useState({
-    tv: true,
-    basic: true,
-    price: true,
-    screenshot: true,
-    notes: true,
-    review: true,
-    stats: true,
-    snippets: false,
-    tests: false,
-  });
+  const [fileError, setFileError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const unsubscribeRef = useRef(null);
   const authUnsubscribeRef = useRef(null);
-  const tests = useMemo(() => runSelfTests(), []);
 
-  const activeSymbol = useMemo(() => normalizeSymbol(form.market, form.category), [form.market, form.category]);
-  const tvEmbedUrl = useMemo(() => buildTradingViewEmbedUrl(activeSymbol, form.timeframe), [activeSymbol, form.timeframe]);
-  const tvOpenUrl = useMemo(() => form.tvLink || buildTradingViewOpenUrl(activeSymbol), [form.tvLink, activeSymbol]);
+  const activeSymbol = useMemo(
+    () => normalizeSymbol(form.market, form.category),
+    [form.market, form.category]
+  );
+  const tvEmbedUrl = useMemo(
+    () => buildTradingViewEmbedUrl(activeSymbol, form.timeframe),
+    [activeSymbol, form.timeframe]
+  );
+  const tvOpenUrl = useMemo(
+    () => form.tvLink || buildTradingViewOpenUrl(activeSymbol),
+    [form.tvLink, activeSymbol]
+  );
+  const stats = useMemo(() => computeStats(entries), [entries]);
+
+  const filteredEntries = useMemo(() => {
+    const q = queryStringNormalize(queryText);
+    return entries.filter((entry) => {
+      const haystack = queryStringNormalize(
+        [
+          entry.market,
+          entry.category,
+          entry.setup,
+          entry.tags,
+          entry.thesis,
+          entry.note,
+        ].join(" ")
+      );
+      const queryMatch = !q || haystack.includes(q);
+      const categoryMatch =
+        categoryFilter === "전체" || entry.category === categoryFilter;
+      return queryMatch && categoryMatch;
+    });
+  }, [entries, queryText, categoryFilter]);
 
   useEffect(() => {
     setFirebaseConfig(loadFirebaseConfig());
   }, []);
 
   useEffect(() => {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return;
-      const normalized = parsed.map((entry) => recalculateEntry({ ...createDefaultEntry(), ...entry, id: entry.id || createId() }));
-      setEntries(normalized);
-      if (normalized[0]) {
-        setSelectedId(normalized[0].id);
-        setForm(normalized[0]);
-      }
-    } catch {
-      setLoadError("저장된 로컬 데이터를 불러오지 못해 새 기록으로 시작합니다.");
+    const localEntries = safeParseEntries(
+      localStorage.getItem(storageKey) || "[]"
+    ).map((entry) =>
+      recalculateEntry({
+        ...createDefaultEntry(),
+        ...entry,
+        id: entry.id || createId(),
+      })
+    );
+    setEntries(localEntries);
+    if (localEntries[0]) {
+      setSelectedId(localEntries[0].id);
+      setForm(localEntries[0]);
     }
   }, []);
 
@@ -434,7 +423,7 @@ export default function TradingJournalApp() {
     try {
       localStorage.setItem(storageKey, JSON.stringify(entries));
     } catch {
-      setLoadError("브라우저 저장 공간에 기록을 저장하지 못했습니다.");
+      setLoadError("로컬 저장에 실패했습니다.");
     }
   }, [entries]);
 
@@ -443,26 +432,29 @@ export default function TradingJournalApp() {
       authUnsubscribeRef.current();
       authUnsubscribeRef.current = null;
     }
-
     if (!isFirebaseConfigReady(firebaseConfig)) {
-      setUser(null);
       setAuthReady(true);
+      setUser(null);
       setSyncMessage("브라우저 저장 모드");
-      return undefined;
+      return;
     }
-
     try {
       const { auth } = getFirebaseServices(firebaseConfig);
       authUnsubscribeRef.current = onAuthStateChanged(auth, (nextUser) => {
         setUser(nextUser);
         setAuthReady(true);
-        setSyncMessage(nextUser ? `클라우드 동기화 완료 · ${nextUser.email || nextUser.displayName || "Google User"}` : "Firebase 연결됨 · Google 로그인 대기");
+        setSyncMessage(
+          nextUser
+            ? `클라우드 동기화 완료 · ${
+                nextUser.email || nextUser.displayName || "Google User"
+              }`
+            : "Firebase 연결됨 · Google 로그인 대기"
+        );
       });
     } catch {
       setAuthReady(true);
       setSyncMessage("Firebase 초기화 실패 · 로컬 저장 모드");
     }
-
     return () => {
       if (authUnsubscribeRef.current) authUnsubscribeRef.current();
     };
@@ -473,89 +465,67 @@ export default function TradingJournalApp() {
       unsubscribeRef.current();
       unsubscribeRef.current = null;
     }
-    if (!user || !isFirebaseConfigReady(firebaseConfig)) return undefined;
-
+    if (!user || !isFirebaseConfigReady(firebaseConfig)) return;
     try {
       const { db } = getFirebaseServices(firebaseConfig);
-      const q = query(collection(db, "users", user.uid, "entries"), orderBy("updatedAt", "desc"));
+      const q = query(
+        collection(db, "users", user.uid, "entries"),
+        orderBy("updatedAt", "desc")
+      );
       unsubscribeRef.current = onSnapshot(q, (snapshot) => {
-        const next = snapshot.docs.map((item) => {
-          const data = item.data();
-          const millis = typeof data.updatedAt?.toMillis === "function" ? data.updatedAt.toMillis() : Date.now();
-          return recalculateEntry({ ...createDefaultEntry(), ...data, id: item.id, updatedAt: millis });
+        const nextEntries = snapshot.docs.map((docItem) => {
+          const data = docItem.data();
+          return recalculateEntry({
+            ...createDefaultEntry(),
+            ...data,
+            id: docItem.id,
+          });
         });
-        setEntries(next);
-
+        setEntries(nextEntries);
         if (selectedId) {
-          const selected = next.find((item) => item.id === selectedId);
+          const selected = nextEntries.find((item) => item.id === selectedId);
           if (selected) setForm(selected);
         }
       });
     } catch {
       setSyncMessage("실시간 동기화 실패 · 로컬 저장 모드");
     }
-
     return () => {
       if (unsubscribeRef.current) unsubscribeRef.current();
     };
   }, [user, firebaseConfig, selectedId]);
 
-  const derived = useMemo(() => computeStats(entries), [entries]);
-  const finished = derived.finished;
-  const stats = derived.summary;
-  const dailyStats = useMemo(() => groupByDate(finished).slice(0, 10), [finished]);
-  const monthlyStats = useMemo(() => groupByMonth(finished), [finished]);
-  const categoryStats = useMemo(() => buildCategoryStats(finished), [finished]);
-
-  const filtered = useMemo(() => {
-    const q = queryStringNormalize(queryText);
-    return entries.filter((e) => {
-      const matchesQuery = !q ? true : queryStringNormalize([e.date, e.category, e.market, e.side, e.setup, e.thesis, e.lesson, e.tags].join(" ")).includes(q);
-      const matchesCategory = categoryFilter === "전체" ? true : e.category === categoryFilter;
-      return matchesQuery && matchesCategory;
-    });
-  }, [entries, queryText, categoryFilter]);
-
   function updateForm(key, value) {
     setForm((prev) => recalculateEntry({ ...prev, [key]: value }));
   }
 
-  function toggleSection(key) {
-    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  function handleConfigField(key, value) {
+    setFirebaseConfig((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleScreenshotChange(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setFileError("");
-    try {
-      const dataUrl = await fileToDataUrl(file);
-      if (user && isFirebaseConfigReady(firebaseConfig)) {
-        const { storage } = getFirebaseServices(firebaseConfig);
-        const storageRef = ref(storage, `users/${user.uid}/screenshots/${form.id}-${Date.now()}`);
-        await uploadString(storageRef, dataUrl, "data_url");
-        const downloadUrl = await getDownloadURL(storageRef);
-        setForm((prev) => ({ ...prev, screenshot: downloadUrl, updatedAt: Date.now() }));
-      } else {
-        setForm((prev) => ({ ...prev, screenshot: dataUrl, updatedAt: Date.now() }));
-      }
-    } catch {
-      setFileError("스크린샷을 불러오지 못했습니다.");
-    }
+  function applyFirebaseConfig() {
+    saveFirebaseConfig(firebaseConfig);
+    setConfigOpen(false);
+    setSyncMessage(
+      isFirebaseConfigReady(firebaseConfig)
+        ? "Firebase 설정 저장됨"
+        : "설정이 아직 완전하지 않음"
+    );
+    window.location.reload();
   }
 
   async function signInWithGoogle() {
     if (!isFirebaseConfigReady(firebaseConfig)) {
       setConfigOpen(true);
-      setSyncMessage("먼저 Firebase 설정을 입력해줘.");
       return;
     }
     try {
       const { auth } = getFirebaseServices(firebaseConfig);
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      await signInWithPopup(auth, new GoogleAuthProvider());
     } catch (error) {
-      setSyncMessage(`Google 로그인 실패${error?.code ? ` · ${error.code}` : ""}`);
+      setSyncMessage(
+        `Google 로그인 실패${error?.code ? ` · ${error.code}` : ""}`
+      );
     }
   }
 
@@ -566,6 +536,20 @@ export default function TradingJournalApp() {
     } catch {
       setSyncMessage("로그아웃 실패");
     }
+  }
+
+  function newEntry() {
+    setForm(createDefaultEntry());
+    setSelectedId(null);
+    setFileError("");
+  }
+
+  function selectEntry(id) {
+    const found = entries.find((entry) => entry.id === id);
+    if (!found) return;
+    setForm(found);
+    setSelectedId(id);
+    setFileError("");
   }
 
   async function saveEntry() {
@@ -581,16 +565,6 @@ export default function TradingJournalApp() {
           { ...nextEntry, userId: user.uid, updatedAt: serverTimestamp() },
           { merge: true }
         );
-        setEntries((prev) => {
-          const index = prev.findIndex((e) => e.id === nextEntry.id);
-          if (index === -1) return [nextEntry, ...prev];
-          const clone = [...prev];
-          clone[index] = nextEntry;
-          return clone;
-        });
-        setSelectedId(nextEntry.id);
-        setSyncMessage("클라우드에 저장됨");
-        return;
       } catch {
         setSyncMessage("클라우드 저장 실패 · 로컬 저장으로 유지");
       } finally {
@@ -599,32 +573,19 @@ export default function TradingJournalApp() {
     }
 
     setEntries((prev) => {
-      const index = prev.findIndex((e) => e.id === nextEntry.id);
+      const index = prev.findIndex((entry) => entry.id === nextEntry.id);
       if (index === -1) return [nextEntry, ...prev];
       const clone = [...prev];
       clone[index] = nextEntry;
       return clone;
     });
     setSelectedId(nextEntry.id);
-  }
-
-  function newEntry() {
-    const fresh = createDefaultEntry();
-    setForm(fresh);
-    setSelectedId(null);
-    setFileError("");
-  }
-
-  function selectEntry(id) {
-    const found = entries.find((e) => e.id === id);
-    if (!found) return;
-    setForm(found);
-    setSelectedId(id);
-    setFileError("");
+    setSyncMessage(user ? "클라우드에 저장됨" : "브라우저에 저장됨");
   }
 
   async function deleteEntry(id) {
     if (!id) return;
+
     if (user && isFirebaseConfigReady(firebaseConfig)) {
       try {
         const { db } = getFirebaseServices(firebaseConfig);
@@ -635,312 +596,490 @@ export default function TradingJournalApp() {
     }
 
     setEntries((prev) => {
-      const next = prev.filter((e) => e.id !== id);
-      if (selectedId === id) {
-        const fresh = createDefaultEntry();
-        setForm(next[0] || fresh);
-        setSelectedId(next[0]?.id || null);
-      }
+      const next = prev.filter((entry) => entry.id !== id);
+      const fresh = createDefaultEntry();
+      setForm(next[0] || fresh);
+      setSelectedId(next[0]?.id || null);
       return next;
     });
   }
 
-  function handleConfigField(key, value) {
-    setFirebaseConfig((prev) => ({ ...prev, [key]: value }));
-  }
-
-  function applyFirebaseConfig() {
-    saveFirebaseConfig(firebaseConfig);
-    setConfigOpen(false);
-    setSyncMessage(isFirebaseConfigReady(firebaseConfig) ? "Firebase 설정 저장됨" : "설정이 아직 완전하지 않음");
-    window.location.reload();
+  async function handleScreenshotChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setFileError("");
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      if (user && isFirebaseConfigReady(firebaseConfig)) {
+        const { storage } = getFirebaseServices(firebaseConfig);
+        const storageRef = ref(
+          storage,
+          `users/${user.uid}/screenshots/${form.id}-${Date.now()}`
+        );
+        await uploadString(storageRef, dataUrl, "data_url");
+        const downloadUrl = await getDownloadURL(storageRef);
+        setForm((prev) => ({
+          ...prev,
+          screenshot: downloadUrl,
+          updatedAt: Date.now(),
+        }));
+      } else {
+        setForm((prev) => ({
+          ...prev,
+          screenshot: dataUrl,
+          updatedAt: Date.now(),
+        }));
+      }
+    } catch {
+      setFileError("스크린샷 업로드 실패");
+    }
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.16),_transparent_28%),linear-gradient(180deg,#07111f_0%,#0b1324_45%,#111827_100%)] p-3 text-slate-100 md:p-5">
-      <div className="mx-auto mb-4 flex max-w-7xl flex-col gap-3 rounded-3xl border border-cyan-500/10 bg-slate-950/70 p-4 shadow-2xl shadow-cyan-950/20 backdrop-blur md:sticky md:top-3 md:z-30 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div className="text-lg font-semibold text-cyan-100">모바일 + 구글 로그인 + 클라우드 저장 + TradingView 연결</div>
-          <div className="text-sm text-slate-400">{syncMessage}</div>
+    <div className="min-h-screen bg-slate-950 text-white">
+      <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-lg font-bold text-cyan-300">
+              📈 Trading Journal A
+            </h1>
+            <p className="text-sm text-slate-400">{syncMessage}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfigOpen((prev) => !prev)}
+            >
+              Firebase 설정
+            </Button>
+            {user ? (
+              <Button variant="outline" onClick={signOutGoogle}>
+                로그아웃
+              </Button>
+            ) : (
+              <Button onClick={signInWithGoogle} disabled={!authReady}>
+                Google 로그인
+              </Button>
+            )}
+            <Button onClick={newEntry}>+ 새 기록</Button>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setConfigOpen((v) => !v)}>Firebase 설정</Button>
-          {user ? <Button variant="outline" onClick={signOutGoogle}>로그아웃</Button> : <Button onClick={signInWithGoogle} disabled={!authReady}>Google 로그인</Button>}
-        </div>
-      </div>
+      </header>
 
       {configOpen ? (
-        <div className="mx-auto mb-4 max-w-7xl rounded-3xl border border-violet-500/10 bg-slate-950/70 p-4 shadow-2xl shadow-violet-950/20 backdrop-blur">
-          <div className="mb-3 text-lg font-semibold text-violet-100">Firebase 설정</div>
-          <div className="mb-4 text-sm text-slate-400">Firebase 프로젝트를 만들고 Authentication에서 Google 로그인, Firestore Database, Storage를 켠 뒤 아래 키를 넣으면 폰/PC에서 같은 데이터가 동기화돼.</div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <Field label="apiKey"><Input value={firebaseConfig.apiKey} onChange={(e) => handleConfigField("apiKey", e.target.value)} /></Field>
-            <Field label="authDomain"><Input value={firebaseConfig.authDomain} onChange={(e) => handleConfigField("authDomain", e.target.value)} /></Field>
-            <Field label="projectId"><Input value={firebaseConfig.projectId} onChange={(e) => handleConfigField("projectId", e.target.value)} /></Field>
-            <Field label="storageBucket"><Input value={firebaseConfig.storageBucket} onChange={(e) => handleConfigField("storageBucket", e.target.value)} /></Field>
-            <Field label="messagingSenderId"><Input value={firebaseConfig.messagingSenderId} onChange={(e) => handleConfigField("messagingSenderId", e.target.value)} /></Field>
-            <Field label="appId"><Input value={firebaseConfig.appId} onChange={(e) => handleConfigField("appId", e.target.value)} /></Field>
-          </div>
-          <div className="mt-4 flex gap-2">
-            <Button onClick={applyFirebaseConfig}>설정 저장</Button>
-            <Button variant="outline" onClick={() => setConfigOpen(false)}>닫기</Button>
-          </div>
+        <div className="mx-auto mt-4 max-w-7xl px-4">
+          <Card className="p-4 md:p-5">
+            <div className="mb-4 text-lg font-semibold text-violet-200">
+              Firebase 설정
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <Field label="apiKey">
+                <Input
+                  value={firebaseConfig.apiKey}
+                  onChange={(e) => handleConfigField("apiKey", e.target.value)}
+                />
+              </Field>
+              <Field label="authDomain">
+                <Input
+                  value={firebaseConfig.authDomain}
+                  onChange={(e) =>
+                    handleConfigField("authDomain", e.target.value)
+                  }
+                />
+              </Field>
+              <Field label="projectId">
+                <Input
+                  value={firebaseConfig.projectId}
+                  onChange={(e) =>
+                    handleConfigField("projectId", e.target.value)
+                  }
+                />
+              </Field>
+              <Field label="storageBucket">
+                <Input
+                  value={firebaseConfig.storageBucket}
+                  onChange={(e) =>
+                    handleConfigField("storageBucket", e.target.value)
+                  }
+                />
+              </Field>
+              <Field label="messagingSenderId">
+                <Input
+                  value={firebaseConfig.messagingSenderId}
+                  onChange={(e) =>
+                    handleConfigField("messagingSenderId", e.target.value)
+                  }
+                />
+              </Field>
+              <Field label="appId">
+                <Input
+                  value={firebaseConfig.appId}
+                  onChange={(e) => handleConfigField("appId", e.target.value)}
+                />
+              </Field>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button onClick={applyFirebaseConfig}>설정 저장</Button>
+              <Button variant="outline" onClick={() => setConfigOpen(false)}>
+                닫기
+              </Button>
+            </div>
+          </Card>
         </div>
       ) : null}
 
-      <div className="mx-auto grid max-w-7xl gap-4 xl:grid-cols-[340px,minmax(0,1fr)] 2xl:grid-cols-[360px,minmax(0,1fr)]">
-        <aside className="space-y-4 xl:sticky xl:top-28 xl:self-start">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-cyan-100">📝 매매일지</CardTitle>
-                <Button onClick={newEntry}>＋ 새 기록</Button>
-              </div>
-              <div className="mt-4 grid gap-3">
-                <Input value={queryText} onChange={(e) => setQueryText(e.target.value)} placeholder="종목, 셋업, 태그 검색" />
-                <div className="flex flex-wrap gap-2">
-                  {["전체", ...assetCategories].map((item) => (
-                    <button key={item} type="button" onClick={() => setCategoryFilter(item)} className={`rounded-full px-3 py-1.5 text-xs transition ${categoryFilter === item ? "bg-cyan-400 text-slate-950" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>
-                      {item}
-                    </button>
-                  ))}
-                </div>
-                {loadError ? <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">{loadError}</div> : null}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <StatCard title="종료 매매" value={stats.total} emoji="📊" />
-                <StatCard title="승률" value={`${stats.winRate.toFixed(1)}%`} emoji="🎯" />
-                <StatCard title="평균 손익" value={formatSigned(stats.avg)} emoji="💹" />
-                <StatCard title="평균 손익비" value={stats.avgRR ? `${stats.avgRR.toFixed(2)} R` : "0 R"} emoji="⚖️" />
-                <StatCard title="손실 비율" value={`${stats.lossRate.toFixed(1)}%`} emoji="📉" />
-                <StatCard title="누적 손익" value={formatSigned(stats.net)} emoji="📅" />
-              </div>
+      <div className="mx-auto grid max-w-7xl gap-4 p-4 md:p-5 xl:grid-cols-[320px,minmax(0,1fr)]">
+        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+          <Card className="p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard title="총 매매" value={stats.total} />
+              <StatCard title="승률" value={`${stats.winRate.toFixed(1)}%`} />
+              <StatCard title="평균 손익" value={formatSigned(stats.avg)} />
+              <StatCard
+                title="평균 RR"
+                value={stats.avgRR ? stats.avgRR.toFixed(2) : "0.00"}
+              />
+            </div>
+          </Card>
 
-              <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-3">
-                <div className="mb-2 text-sm font-semibold text-slate-200">자산군별 집계</div>
-                <div className="grid gap-2">
-                  {categoryStats.map((item) => (
-                    <div key={item.category} className="flex items-center justify-between rounded-2xl bg-slate-950/60 px-3 py-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Badge>{item.category}</Badge>
-                        <span className="text-slate-300">{item.count}건</span>
-                      </div>
-                      <div className="text-right">
-                        <div className={item.pnl >= 0 ? "text-cyan-300" : "text-rose-300"}>{formatSigned(item.pnl)}</div>
-                        <div className="text-xs text-slate-400">승 {item.wins} / 손 {item.losses}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="max-h-[38vh] space-y-2 overflow-auto pr-1 xl:max-h-[46vh]">
-                {filtered.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">아직 기록이 없어요. 첫 매매일지를 만들어보세요.</div> : null}
-                {filtered.map((entry) => (
-                  <button key={entry.id} type="button" onClick={() => selectEntry(entry.id)} className={`w-full rounded-2xl border p-3 text-left transition ${selectedId === entry.id ? "border-cyan-400 bg-cyan-400/10 text-white shadow-lg shadow-cyan-950/20" : "border-slate-800 bg-slate-900/70 hover:border-slate-600"}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="font-semibold">{entry.market}</div>
-                        <Badge>{entry.category}</Badge>
-                      </div>
-                      <div className="text-xs text-slate-400">{entry.date}</div>
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-300">
-                      <span>{entry.side}</span>
-                      <span>·</span>
-                      <span>{entry.setup}</span>
-                      <span>·</span>
-                      <span>{entry.status}</span>
-                      {entry.pnl ? <span className={Number(entry.pnl) >= 0 ? "text-cyan-300" : "text-rose-300"}>· {entry.pnl}%</span> : null}
-                    </div>
-                    <div className="mt-2 line-clamp-2 text-xs text-slate-400">{entry.thesis || "진입 근거를 적어보세요."}</div>
+          <Card className="p-4">
+            <div className="mb-3 text-sm font-semibold text-slate-200">
+              기록 리스트
+            </div>
+            <div className="grid gap-3">
+              <Input
+                value={queryText}
+                onChange={(e) => setQueryText(e.target.value)}
+                placeholder="검색"
+              />
+              <div className="flex flex-wrap gap-2">
+                {["전체", ...assetCategories].map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setCategoryFilter(item)}
+                    className={`rounded-full px-3 py-1.5 text-xs ${
+                      categoryFilter === item
+                        ? "bg-cyan-400 text-slate-950"
+                        : "bg-slate-800 text-slate-300"
+                    }`}
+                  >
+                    {item}
                   </button>
                 ))}
               </div>
-            </CardContent>
+              {loadError ? (
+                <div className="rounded-2xl bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                  {loadError}
+                </div>
+              ) : null}
+              <div className="max-h-[50vh] space-y-2 overflow-auto pr-1">
+                {filteredEntries.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
+                    기록이 없습니다.
+                  </div>
+                ) : null}
+                {filteredEntries.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    onClick={() => selectEntry(entry.id)}
+                    className={`w-full rounded-2xl border p-3 text-left ${
+                      selectedId === entry.id
+                        ? "border-cyan-400 bg-cyan-400/10"
+                        : "border-slate-800 bg-slate-900/70"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-semibold">{entry.market}</div>
+                      <div className="text-xs text-slate-400">{entry.date}</div>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      {entry.category} · {entry.side} · {entry.status}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-300">
+                      {entry.pnl ? `${entry.pnl}%` : "미청산"}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </Card>
         </aside>
 
-        <main className="min-w-0 space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <CardTitle className="text-cyan-100">TradingView 복기 템플릿</CardTitle>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={() => deleteEntry(form.id)} disabled={!form.id}>삭제</Button>
-                  <Button onClick={saveEntry} disabled={isSavingCloud}>{isSavingCloud ? "저장 중..." : "저장"}</Button>
+        <main className="space-y-4 min-w-0">
+          <Card className="p-4 md:p-5">
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-xl font-semibold text-cyan-100">
+                  기록 상세 / 입력
+                </div>
+                <div className="text-sm text-slate-400">
+                  개인용 A버전 · 심플하고 빠르게 기록하는 구조
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <ResponsiveSection title="TradingView 연결" open={openSections.tv} onToggle={() => toggleSection("tv")}>
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),280px]">
-                  <div className="min-h-[280px] overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/60">
-                    <iframe title="TradingView" src={tvEmbedUrl} className="h-[340px] w-full border-0 md:h-[420px]" />
-                  </div>
-                  <div className="space-y-3 rounded-3xl border border-slate-800 bg-slate-900/60 p-4">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-200">현재 심볼</div>
-                      <div className="mt-1 break-all text-sm text-cyan-300">{activeSymbol}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-slate-200">트레이딩뷰 오픈</div>
-                      <a href={tvOpenUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-sm text-cyan-300 underline underline-offset-4">새 탭에서 열기</a>
-                    </div>
-                    <div className="text-xs text-slate-400">실시간 주문 연동은 브로커/TradingView 웹훅 서버가 따로 필요해서 여기서는 차트 링크, 심볼 동기화, 복기 중심으로 연결해뒀어.</div>
-                  </div>
-                </div>
-              </ResponsiveSection>
-
-              <div className="grid gap-4 2xl:grid-cols-2">
-                <ResponsiveSection title="기본 정보" open={openSections.basic} onToggle={() => toggleSection("basic")}>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="날짜"><Input type="date" value={form.date} onChange={(e) => updateForm("date", e.target.value)} /></Field>
-                    <Field label="자산군"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.category} onChange={(e) => updateForm("category", e.target.value)}>{assetCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select></Field>
-                    <Field label="종목"><Input value={form.market} onChange={(e) => updateForm("market", e.target.value)} placeholder="BTCUSDT / 005930 / AAPL" /></Field>
-                    <Field label="방향"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.side} onChange={(e) => updateForm("side", e.target.value)}><option value="Long">Long</option><option value="Short">Short</option></select></Field>
-                    <Field label="셋업"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.setup} onChange={(e) => updateForm("setup", e.target.value)}><option value="반등매매">반등매매</option><option value="돌파매매">돌파매매</option><option value="눌림목">눌림목</option><option value="추세추종">추세추종</option><option value="역추세">역추세</option></select></Field>
-                    <Field label="타임프레임"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.timeframe} onChange={(e) => updateForm("timeframe", e.target.value)}><option value="5M">5M</option><option value="15M">15M</option><option value="1H">1H</option><option value="4H">4H</option><option value="1D">1D</option></select></Field>
-                    <Field label="상태"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.status} onChange={(e) => updateForm("status", e.target.value)}><option value="대기">대기</option><option value="진행중">진행중</option><option value="종료">종료</option></select></Field>
-                    <Field label="스토캐스틱"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.stochastic} onChange={(e) => updateForm("stochastic", e.target.value)}><option value="과매도">과매도</option><option value="중립">중립</option><option value="과매수">과매수</option></select></Field>
-                    <Field label="시장 상태"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.marketCondition} onChange={(e) => updateForm("marketCondition", e.target.value)}><option value="상승">상승</option><option value="하락">하락</option><option value="횡보">횡보</option></select></Field>
-                  </div>
-                </ResponsiveSection>
-
-                <ResponsiveSection title="가격 / 손익비" open={openSections.price} onToggle={() => toggleSection("price")}>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="진입가"><Input value={form.entryPrice} onChange={(e) => updateForm("entryPrice", e.target.value)} /></Field>
-                    <Field label="손절가"><Input value={form.stopPrice} onChange={(e) => updateForm("stopPrice", e.target.value)} /></Field>
-                    <Field label="목표가"><Input value={form.targetPrice} onChange={(e) => updateForm("targetPrice", e.target.value)} /></Field>
-                    <Field label="청산가"><Input value={form.exitPrice} onChange={(e) => updateForm("exitPrice", e.target.value)} /></Field>
-                    <Field label="수익률(%)"><Input value={form.pnl} onChange={(e) => updateForm("pnl", e.target.value)} /></Field>
-                  </div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    <MetricCard label="리스크" value={form.riskPct ? `${form.riskPct}%` : "-"} tone="rose" />
-                    <MetricCard label="리워드" value={form.rewardPct ? `${form.rewardPct}%` : "-"} tone="cyan" />
-                    <MetricCard label="손익비(R:R)" value={form.riskReward ? `1 : ${form.riskReward}` : "-"} tone="violet" />
-                  </div>
-                </ResponsiveSection>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => deleteEntry(form.id)}
+                  disabled={!form.id}
+                >
+                  삭제
+                </Button>
+                <Button onClick={saveEntry} disabled={isSavingCloud}>
+                  {isSavingCloud ? "저장 중..." : "저장"}
+                </Button>
               </div>
+            </div>
 
-              <div className="grid gap-4 2xl:grid-cols-[1.1fr,0.9fr]">
-                <ResponsiveSection title="스크린샷" open={openSections.screenshot} onToggle={() => toggleSection("screenshot")}>
-                  <div className="grid gap-4 lg:grid-cols-[220px,minmax(0,1fr)]">
-                    <label className="flex min-h-[220px] cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-slate-700 bg-slate-900/60 p-4 text-center hover:border-cyan-400 hover:bg-slate-900">
-                      <span className="mb-3 text-3xl">📷</span>
-                      <span className="text-sm font-medium text-slate-200">차트 스크린샷 업로드</span>
-                      <span className="mt-1 text-xs text-slate-400">로그인 상태면 클라우드 스토리지에 저장돼.</span>
-                      <input type="file" accept="image/*" className="hidden" onChange={handleScreenshotChange} />
-                    </label>
-                    <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-3">
-                      {form.screenshot ? <img src={form.screenshot} alt="trade screenshot" className="h-full max-h-[360px] w-full rounded-2xl object-contain" /> : <div className="flex h-full min-h-[220px] items-center justify-center rounded-2xl bg-slate-950/70 text-sm text-slate-400">아직 첨부된 스크린샷이 없습니다.</div>}
-                      {fileError ? <div className="mt-3 text-sm text-rose-300">{fileError}</div> : null}
-                    </div>
-                  </div>
-                </ResponsiveSection>
-
-                <ResponsiveSection title="진입 전 메모" open={openSections.notes} onToggle={() => toggleSection("notes")}>
-                  <div className="grid gap-4">
-                    <Field label="진입 근거"><Textarea rows={4} value={form.thesis} onChange={(e) => updateForm("thesis", e.target.value)} placeholder="예: 스토캐스틱 과매도 + 240MA 근접 + FVG 하단 반응" /></Field>
-                    <Field label="체결 메모 / 실행 이유"><Textarea rows={4} value={form.executionNote} onChange={(e) => updateForm("executionNote", e.target.value)} placeholder="예: 진입은 좋았지만 1차 반등에서 확신 부족" /></Field>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field label="시나리오 A"><Textarea rows={4} value={form.scenarioA} onChange={(e) => updateForm("scenarioA", e.target.value)} placeholder="예: 지지 확인 후 반등 지속" /></Field>
-                      <Field label="시나리오 B"><Textarea rows={4} value={form.scenarioB} onChange={(e) => updateForm("scenarioB", e.target.value)} placeholder="예: 저점 스윕 후 재차 회복" /></Field>
-                    </div>
-                  </div>
-                </ResponsiveSection>
-              </div>
-
-              <div className="grid gap-4 2xl:grid-cols-[1fr,1fr]">
-                <ResponsiveSection title="복기" open={openSections.review} onToggle={() => toggleSection("review")}>
-                  <div className="grid gap-4">
-                    <Field label="결과 리뷰"><Textarea rows={4} value={form.resultReview} onChange={(e) => updateForm("resultReview", e.target.value)} /></Field>
-                    <Field label="실수"><Textarea rows={4} value={form.mistake} onChange={(e) => updateForm("mistake", e.target.value)} /></Field>
-                    <Field label="배운 점"><Textarea rows={4} value={form.lesson} onChange={(e) => updateForm("lesson", e.target.value)} /></Field>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <Field label="외부 흐름"><Input value={form.externalFlow} onChange={(e) => updateForm("externalFlow", e.target.value)} /></Field>
-                      <Field label="TradingView 링크"><Input value={form.tvLink} onChange={(e) => updateForm("tvLink", e.target.value)} placeholder="붙여넣으면 기본 링크 대신 사용" /></Field>
-                      <Field label="태그"><Input value={form.tags} onChange={(e) => updateForm("tags", e.target.value)} /></Field>
-                    </div>
-                  </div>
-                </ResponsiveSection>
-
-                <ResponsiveSection title="월별 / 일별 통계" open={openSections.stats} onToggle={() => toggleSection("stats")}>
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    <Card className="border-slate-800 bg-slate-900/60">
-                      <CardContent className="p-4">
-                        <div className="mb-3 text-sm font-semibold text-slate-200">최근 일별 통계</div>
-                        <div className="space-y-2">
-                          {dailyStats.length === 0 ? <div className="text-sm text-slate-400">종료된 매매가 아직 없습니다.</div> : null}
-                          {dailyStats.map((item) => (
-                            <div key={item.date} className="flex items-center justify-between rounded-2xl bg-slate-950/70 px-3 py-2 text-sm">
-                              <div>
-                                <div className="font-medium text-slate-200">{item.date}</div>
-                                <div className="text-xs text-slate-400">총 {item.count}건 · 승 {item.win} · 손 {item.loss}</div>
-                              </div>
-                              <div className={item.pnl >= 0 ? "text-cyan-300" : "text-rose-300"}>{formatSigned(item.pnl)}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                    <Card className="border-slate-800 bg-slate-900/60">
-                      <CardContent className="p-4">
-                        <div className="mb-3 text-sm font-semibold text-slate-200">월별 통계</div>
-                        <div className="max-h-[280px] space-y-2 overflow-auto pr-1">
-                          {monthlyStats.length === 0 ? <div className="text-sm text-slate-400">종료된 매매가 아직 없습니다.</div> : null}
-                          {monthlyStats.map((item) => (
-                            <div key={item.month} className="flex items-center justify-between rounded-2xl bg-slate-950/70 px-3 py-2 text-sm">
-                              <div>
-                                <div className="font-medium text-slate-200">{item.month}</div>
-                                <div className="text-xs text-slate-400">총 {item.count}건 · 승 {item.win} · 손 {item.loss}</div>
-                              </div>
-                              <div className={item.pnl >= 0 ? "text-cyan-300" : "text-rose-300"}>{formatSigned(item.pnl)}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </ResponsiveSection>
-              </div>
-
-              <ResponsiveSection title="TradingView에 붙일 텍스트" open={openSections.snippets} onToggle={() => toggleSection("snippets")}>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),320px]">
+              <div className="space-y-4">
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <Card className="border-slate-800 bg-slate-900/60">
-                    <CardContent className="p-4">
-                      <div className="mb-2 text-sm font-semibold text-cyan-200">진입 전</div>
-                      <pre className="whitespace-pre-wrap text-sm text-slate-300">{`[진입 이유]\n- ${form.thesis || ""}\n\n[시장 상태]\n- ${form.category} / ${form.marketCondition} / ${form.stochastic}\n- ${form.externalFlow || ""}\n\n[시나리오]\nA: ${form.scenarioA || ""}\nB: ${form.scenarioB || ""}\n\n[손절]\n- ${form.stopPrice || ""}\n\n[목표 / 손익비]\n- 목표가: ${form.targetPrice || ""}\n- 손익비: ${form.riskReward ? `1:${form.riskReward}` : ""}`}</pre>
-                    </CardContent>
-                  </Card>
-                  <Card className="border-slate-800 bg-slate-900/60">
-                    <CardContent className="p-4">
-                      <div className="mb-2 text-sm font-semibold text-cyan-200">청산 후</div>
-                      <pre className="whitespace-pre-wrap text-sm text-slate-300">{`[결과]\n- ${form.pnl ? `${form.pnl}%` : ""}\n- ${form.resultReview || ""}\n\n[실수]\n- ${form.mistake || ""}\n\n[배운 점]\n- ${form.lesson || ""}`}</pre>
-                    </CardContent>
-                  </Card>
-                </div>
-              </ResponsiveSection>
-
-              <ResponsiveSection title="검증" open={openSections.tests} onToggle={() => toggleSection("tests")}>
-                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                  {tests.map((test) => (
-                    <div key={test.name} className={`rounded-2xl border px-3 py-2 text-sm ${test.ok ? "border-cyan-500/20 bg-cyan-500/10 text-cyan-200" : "border-rose-500/20 bg-rose-500/10 text-rose-200"}`}>
-                      {test.ok ? "통과" : "실패"} · {test.name}
+                  <Section title="기본 정보">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="날짜">
+                        <Input
+                          type="date"
+                          value={form.date}
+                          onChange={(e) => updateForm("date", e.target.value)}
+                        />
+                      </Field>
+                      <Field label="자산군">
+                        <select
+                          className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                          value={form.category}
+                          onChange={(e) =>
+                            updateForm("category", e.target.value)
+                          }
+                        >
+                          {assetCategories.map((category) => (
+                            <option key={category} value={category}>
+                              {category}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="종목">
+                        <Input
+                          value={form.market}
+                          onChange={(e) => updateForm("market", e.target.value)}
+                          placeholder="BTCUSDT / 005930 / AAPL"
+                        />
+                      </Field>
+                      <Field label="방향">
+                        <select
+                          className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                          value={form.side}
+                          onChange={(e) => updateForm("side", e.target.value)}
+                        >
+                          <option value="Long">Long</option>
+                          <option value="Short">Short</option>
+                        </select>
+                      </Field>
+                      <Field label="셋업">
+                        <Input
+                          value={form.setup}
+                          onChange={(e) => updateForm("setup", e.target.value)}
+                        />
+                      </Field>
+                      <Field label="타임프레임">
+                        <select
+                          className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                          value={form.timeframe}
+                          onChange={(e) =>
+                            updateForm("timeframe", e.target.value)
+                          }
+                        >
+                          <option value="5M">5M</option>
+                          <option value="15M">15M</option>
+                          <option value="1H">1H</option>
+                          <option value="4H">4H</option>
+                          <option value="1D">1D</option>
+                        </select>
+                      </Field>
+                      <Field label="상태">
+                        <select
+                          className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                          value={form.status}
+                          onChange={(e) => updateForm("status", e.target.value)}
+                        >
+                          <option value="대기">대기</option>
+                          <option value="진행중">진행중</option>
+                          <option value="종료">종료</option>
+                        </select>
+                      </Field>
+                      <Field label="태그">
+                        <Input
+                          value={form.tags}
+                          onChange={(e) => updateForm("tags", e.target.value)}
+                          placeholder="예: 눌림목, FVG"
+                        />
+                      </Field>
                     </div>
-                  ))}
+                  </Section>
+
+                  <Section title="가격 / 계산">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="진입가">
+                        <Input
+                          value={form.entryPrice}
+                          onChange={(e) =>
+                            updateForm("entryPrice", e.target.value)
+                          }
+                        />
+                      </Field>
+                      <Field label="손절가">
+                        <Input
+                          value={form.stopPrice}
+                          onChange={(e) =>
+                            updateForm("stopPrice", e.target.value)
+                          }
+                        />
+                      </Field>
+                      <Field label="목표가">
+                        <Input
+                          value={form.targetPrice}
+                          onChange={(e) =>
+                            updateForm("targetPrice", e.target.value)
+                          }
+                        />
+                      </Field>
+                      <Field label="청산가">
+                        <Input
+                          value={form.exitPrice}
+                          onChange={(e) =>
+                            updateForm("exitPrice", e.target.value)
+                          }
+                        />
+                      </Field>
+                      <Field label="수익률(%)">
+                        <Input
+                          value={form.pnl}
+                          onChange={(e) => updateForm("pnl", e.target.value)}
+                        />
+                      </Field>
+                    </div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                      <MetricCard
+                        label="리스크"
+                        value={form.riskPct ? `${form.riskPct}%` : "-"}
+                        tone="rose"
+                      />
+                      <MetricCard
+                        label="리워드"
+                        value={form.rewardPct ? `${form.rewardPct}%` : "-"}
+                        tone="cyan"
+                      />
+                      <MetricCard
+                        label="RR"
+                        value={form.riskReward ? `1:${form.riskReward}` : "-"}
+                        tone="violet"
+                      />
+                    </div>
+                  </Section>
                 </div>
-              </ResponsiveSection>
-            </CardContent>
+
+                <div className="grid gap-4 lg:grid-cols-[1fr,1fr]">
+                  <Section title="진입 메모">
+                    <div className="grid gap-3">
+                      <Field label="진입 근거">
+                        <Textarea
+                          rows={5}
+                          value={form.thesis}
+                          onChange={(e) => updateForm("thesis", e.target.value)}
+                          placeholder="왜 들어갔는지 적기"
+                        />
+                      </Field>
+                      <Field label="추가 메모">
+                        <Textarea
+                          rows={5}
+                          value={form.note}
+                          onChange={(e) => updateForm("note", e.target.value)}
+                          placeholder="심리, 시나리오, 외부 변수"
+                        />
+                      </Field>
+                    </div>
+                  </Section>
+
+                  <Section title="복기">
+                    <Field label="복기 메모">
+                      <Textarea
+                        rows={11}
+                        value={form.review}
+                        onChange={(e) => updateForm("review", e.target.value)}
+                        placeholder="결과, 실수, 배운 점"
+                      />
+                    </Field>
+                  </Section>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <Section title="TradingView">
+                  <div className="space-y-3">
+                    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
+                      <iframe
+                        title="TradingView"
+                        src={tvEmbedUrl}
+                        className="h-[260px] w-full border-0"
+                      />
+                    </div>
+                    <Field label="TradingView 링크">
+                      <Input
+                        value={form.tvLink}
+                        onChange={(e) => updateForm("tvLink", e.target.value)}
+                        placeholder="붙여넣으면 우선 사용"
+                      />
+                    </Field>
+                    <a
+                      href={tvOpenUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block text-sm text-cyan-300 underline underline-offset-4"
+                    >
+                      새 탭에서 TradingView 열기
+                    </a>
+                  </div>
+                </Section>
+
+                <Section title="스크린샷">
+                  <div className="space-y-3">
+                    <label className="flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-4 text-center">
+                      <span className="mb-2 text-3xl">📷</span>
+                      <span className="text-sm text-slate-200">
+                        차트 스크린샷 업로드
+                      </span>
+                      <span className="mt-1 text-xs text-slate-400">
+                        로그인 상태면 클라우드 저장
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleScreenshotChange}
+                      />
+                    </label>
+                    {form.screenshot ? (
+                      <img
+                        src={form.screenshot}
+                        alt="trade screenshot"
+                        className="max-h-[240px] w-full rounded-2xl object-contain"
+                      />
+                    ) : (
+                      <div className="rounded-2xl bg-slate-900/60 p-4 text-center text-sm text-slate-400">
+                        스크린샷 없음
+                      </div>
+                    )}
+                    {fileError ? (
+                      <div className="text-sm text-rose-300">{fileError}</div>
+                    ) : null}
+                  </div>
+                </Section>
+              </div>
+            </div>
           </Card>
         </main>
       </div>
     </div>
   );
-}
-
-function queryStringNormalize(value) {
-  return String(value || "").toLowerCase().trim();
 }
