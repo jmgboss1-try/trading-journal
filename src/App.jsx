@@ -21,7 +21,7 @@ import {
 import { getDownloadURL, getStorage, ref, uploadString } from "firebase/storage";
 
 const assetCategories = ["BTC", "알트", "국내주식", "해외주식"];
-const storageKey = "tv-journal-app-v4-local";
+const storageKey = "tv-journal-app-v5-local";
 const firebaseConfigKey = "tv-journal-firebase-config";
 
 function getToday() {
@@ -88,7 +88,7 @@ function isFirebaseConfigReady(config) {
       config.projectId &&
       config.storageBucket &&
       config.messagingSenderId &&
-      config.appId,
+      config.appId
   );
 }
 
@@ -294,15 +294,19 @@ function getFirebaseServices(config) {
 function Card({ children, className = "" }) {
   return <div className={`rounded-3xl border border-cyan-500/10 bg-slate-950/70 shadow-2xl shadow-cyan-950/20 backdrop-blur ${className}`}>{children}</div>;
 }
+
 function CardHeader({ children, className = "" }) {
   return <div className={`p-5 md:p-6 ${className}`}>{children}</div>;
 }
+
 function CardTitle({ children, className = "" }) {
   return <h2 className={`text-xl font-semibold ${className}`}>{children}</h2>;
 }
+
 function CardContent({ children, className = "" }) {
   return <div className={`px-5 pb-5 md:px-6 md:pb-6 ${className}`}>{children}</div>;
 }
+
 function Button({ children, className = "", variant = "primary", type = "button", ...props }) {
   const base = "inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-cyan-400/40 disabled:cursor-not-allowed disabled:opacity-50";
   const styles = variant === "outline" ? "border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" : "bg-cyan-500 text-slate-950 hover:bg-cyan-400";
@@ -312,15 +316,19 @@ function Button({ children, className = "", variant = "primary", type = "button"
     </button>
   );
 }
+
 function Input({ className = "", ...props }) {
-  return <input className={`input ${className}`} {...props} />;
+  return <input className={`w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 shadow-sm outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30 ${className}`} {...props} />;
 }
+
 function Textarea({ className = "", ...props }) {
-  return <textarea className={`input ${className}`} {...props} />;
+  return <textarea className={`w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 shadow-sm outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30 ${className}`} {...props} />;
 }
+
 function Badge({ children, className = "" }) {
   return <span className={`inline-flex items-center rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-200 ${className}`}>{children}</span>;
 }
+
 function Field({ label, children }) {
   return (
     <label>
@@ -329,6 +337,7 @@ function Field({ label, children }) {
     </label>
   );
 }
+
 function StatCard({ title, value, emoji }) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
@@ -340,8 +349,13 @@ function StatCard({ title, value, emoji }) {
     </div>
   );
 }
+
 function MetricCard({ label, value, tone = "cyan" }) {
-  const tones = { cyan: "border-cyan-500/20 bg-cyan-500/10 text-cyan-200", rose: "border-rose-500/20 bg-rose-500/10 text-rose-200", violet: "border-violet-500/20 bg-violet-500/10 text-violet-200" };
+  const tones = {
+    cyan: "border-cyan-500/20 bg-cyan-500/10 text-cyan-200",
+    rose: "border-rose-500/20 bg-rose-500/10 text-rose-200",
+    violet: "border-violet-500/20 bg-violet-500/10 text-violet-200",
+  };
   return (
     <div className={`rounded-2xl border p-4 ${tones[tone]}`}>
       <div className="text-xs opacity-80">{label}</div>
@@ -350,11 +364,23 @@ function MetricCard({ label, value, tone = "cyan" }) {
   );
 }
 
+function ResponsiveSection({ title, open, onToggle, children }) {
+  return (
+    <section className="rounded-3xl border border-slate-800 bg-slate-900/40 p-4 md:p-5">
+      <button type="button" onClick={onToggle} className="mb-4 flex w-full items-center justify-between gap-3 text-left">
+        <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
+        <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">{open ? "접기" : "펼치기"}</span>
+      </button>
+      {open ? children : null}
+    </section>
+  );
+}
+
 export default function TradingJournalApp() {
   const [entries, setEntries] = useState([]);
   const [form, setForm] = useState(createDefaultEntry());
   const [selectedId, setSelectedId] = useState(null);
-  const [searchText, setSearchText] = useState("");
+  const [queryText, setQueryText] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("전체");
   const [loadError, setLoadError] = useState("");
   const [fileError, setFileError] = useState("");
@@ -364,6 +390,17 @@ export default function TradingJournalApp() {
   const [authReady, setAuthReady] = useState(false);
   const [syncMessage, setSyncMessage] = useState("브라우저 저장 모드");
   const [isSavingCloud, setIsSavingCloud] = useState(false);
+  const [openSections, setOpenSections] = useState({
+    tv: true,
+    basic: true,
+    price: true,
+    screenshot: true,
+    notes: true,
+    review: true,
+    stats: true,
+    snippets: false,
+    tests: false,
+  });
   const unsubscribeRef = useRef(null);
   const authUnsubscribeRef = useRef(null);
   const tests = useMemo(() => runSelfTests(), []);
@@ -406,11 +443,12 @@ export default function TradingJournalApp() {
       authUnsubscribeRef.current();
       authUnsubscribeRef.current = null;
     }
+
     if (!isFirebaseConfigReady(firebaseConfig)) {
       setUser(null);
       setAuthReady(true);
       setSyncMessage("브라우저 저장 모드");
-      return;
+      return undefined;
     }
 
     try {
@@ -418,15 +456,11 @@ export default function TradingJournalApp() {
       authUnsubscribeRef.current = onAuthStateChanged(auth, (nextUser) => {
         setUser(nextUser);
         setAuthReady(true);
-        if (nextUser) {
-          setSyncMessage(`클라우드 동기화 중 · ${nextUser.email || nextUser.displayName || "Google User"}`);
-        } else {
-          setSyncMessage("Firebase 연결됨 · Google 로그인 대기");
-        }
+        setSyncMessage(nextUser ? `클라우드 동기화 완료 · ${nextUser.email || nextUser.displayName || "Google User"}` : "Firebase 연결됨 · Google 로그인 대기");
       });
     } catch {
-      setSyncMessage("Firebase 초기화 실패 · 로컬 저장 모드");
       setAuthReady(true);
+      setSyncMessage("Firebase 초기화 실패 · 로컬 저장 모드");
     }
 
     return () => {
@@ -439,19 +473,22 @@ export default function TradingJournalApp() {
       unsubscribeRef.current();
       unsubscribeRef.current = null;
     }
-    if (!user || !isFirebaseConfigReady(firebaseConfig)) return;
+    if (!user || !isFirebaseConfigReady(firebaseConfig)) return undefined;
 
     try {
       const { db } = getFirebaseServices(firebaseConfig);
-      const entriesQuery = query(collection(db, "users", user.uid, "entries"), orderBy("updatedAt", "desc"));
-      unsubscribeRef.current = onSnapshot(entriesQuery, (snapshot) => {
-        const next = snapshot.docs.map((item) => recalculateEntry({ ...createDefaultEntry(), ...item.data(), id: item.id }));
+      const q = query(collection(db, "users", user.uid, "entries"), orderBy("updatedAt", "desc"));
+      unsubscribeRef.current = onSnapshot(q, (snapshot) => {
+        const next = snapshot.docs.map((item) => {
+          const data = item.data();
+          const millis = typeof data.updatedAt?.toMillis === "function" ? data.updatedAt.toMillis() : Date.now();
+          return recalculateEntry({ ...createDefaultEntry(), ...data, id: item.id, updatedAt: millis });
+        });
         setEntries(next);
-        setSyncMessage(`클라우드 동기화 완료 · ${next.length}개 기록`);
-        if (next.length > 0) {
-          const keepCurrent = next.find((item) => item.id === selectedId);
-          setForm(keepCurrent || next[0]);
-          setSelectedId((prev) => (keepCurrent ? prev : next[0].id));
+
+        if (selectedId) {
+          const selected = next.find((item) => item.id === selectedId);
+          if (selected) setForm(selected);
         }
       });
     } catch {
@@ -471,18 +508,20 @@ export default function TradingJournalApp() {
   const categoryStats = useMemo(() => buildCategoryStats(finished), [finished]);
 
   const filtered = useMemo(() => {
-    const normalizedSearch = queryStringNormalize(searchText);
+    const q = queryStringNormalize(queryText);
     return entries.filter((e) => {
-      const matchesQuery = !normalizedSearch
-        ? true
-        : queryStringNormalize([e.date, e.category, e.market, e.side, e.setup, e.thesis, e.lesson, e.tags].join(" ")).includes(normalizedSearch);
+      const matchesQuery = !q ? true : queryStringNormalize([e.date, e.category, e.market, e.side, e.setup, e.thesis, e.lesson, e.tags].join(" ")).includes(q);
       const matchesCategory = categoryFilter === "전체" ? true : e.category === categoryFilter;
       return matchesQuery && matchesCategory;
     });
-  }, [entries, searchText, categoryFilter]);
+  }, [entries, queryText, categoryFilter]);
 
   function updateForm(key, value) {
     setForm((prev) => recalculateEntry({ ...prev, [key]: value }));
+  }
+
+  function toggleSection(key) {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
   async function handleScreenshotChange(event) {
@@ -515,8 +554,8 @@ export default function TradingJournalApp() {
       const { auth } = getFirebaseServices(firebaseConfig);
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-    } catch {
-      setSyncMessage("Google 로그인 실패");
+    } catch (error) {
+      setSyncMessage(`Google 로그인 실패${error?.code ? ` · ${error.code}` : ""}`);
     }
   }
 
@@ -539,13 +578,16 @@ export default function TradingJournalApp() {
         const { db } = getFirebaseServices(firebaseConfig);
         await setDoc(
           doc(db, "users", user.uid, "entries", nextEntry.id),
-          {
-            ...nextEntry,
-            userId: user.uid,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
+          { ...nextEntry, userId: user.uid, updatedAt: serverTimestamp() },
+          { merge: true }
         );
+        setEntries((prev) => {
+          const index = prev.findIndex((e) => e.id === nextEntry.id);
+          if (index === -1) return [nextEntry, ...prev];
+          const clone = [...prev];
+          clone[index] = nextEntry;
+          return clone;
+        });
         setSelectedId(nextEntry.id);
         setSyncMessage("클라우드에 저장됨");
         return;
@@ -569,7 +611,7 @@ export default function TradingJournalApp() {
   function newEntry() {
     const fresh = createDefaultEntry();
     setForm(fresh);
-    setSelectedId(fresh.id);
+    setSelectedId(null);
     setFileError("");
   }
 
@@ -587,7 +629,6 @@ export default function TradingJournalApp() {
       try {
         const { db } = getFirebaseServices(firebaseConfig);
         await deleteDoc(doc(db, "users", user.uid, "entries", id));
-        return;
       } catch {
         setSyncMessage("클라우드 삭제 실패");
       }
@@ -596,14 +637,9 @@ export default function TradingJournalApp() {
     setEntries((prev) => {
       const next = prev.filter((e) => e.id !== id);
       if (selectedId === id) {
-        if (next[0]) {
-          setForm(next[0]);
-          setSelectedId(next[0].id);
-        } else {
-          const fresh = createDefaultEntry();
-          setForm(fresh);
-          setSelectedId(fresh.id);
-        }
+        const fresh = createDefaultEntry();
+        setForm(next[0] || fresh);
+        setSelectedId(next[0]?.id || null);
       }
       return next;
     });
@@ -617,28 +653,19 @@ export default function TradingJournalApp() {
     saveFirebaseConfig(firebaseConfig);
     setConfigOpen(false);
     setSyncMessage(isFirebaseConfigReady(firebaseConfig) ? "Firebase 설정 저장됨" : "설정이 아직 완전하지 않음");
+    window.location.reload();
   }
 
   return (
-    <div className="min-h-screen app-bg p-3 text-slate-100 md:p-6">
-      <div className="mx-auto mb-4 flex max-w-7xl flex-col gap-3 rounded-3xl border border-cyan-500/10 bg-slate-950/70 p-4 shadow-2xl shadow-cyan-950/20 backdrop-blur md:flex-row md:items-center md:justify-between">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.16),_transparent_28%),linear-gradient(180deg,#07111f_0%,#0b1324_45%,#111827_100%)] p-3 text-slate-100 md:p-5">
+      <div className="mx-auto mb-4 flex max-w-7xl flex-col gap-3 rounded-3xl border border-cyan-500/10 bg-slate-950/70 p-4 shadow-2xl shadow-cyan-950/20 backdrop-blur md:sticky md:top-3 md:z-30 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="text-lg font-semibold text-cyan-100">모바일 + 구글 로그인 + 클라우드 저장 + TradingView 연결</div>
           <div className="text-sm text-slate-400">{syncMessage}</div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setConfigOpen((v) => !v)}>
-            Firebase 설정
-          </Button>
-          {user ? (
-            <Button variant="outline" onClick={signOutGoogle}>
-              로그아웃
-            </Button>
-          ) : (
-            <Button onClick={signInWithGoogle} disabled={!authReady}>
-              Google 로그인
-            </Button>
-          )}
+          <Button variant="outline" onClick={() => setConfigOpen((v) => !v)}>Firebase 설정</Button>
+          {user ? <Button variant="outline" onClick={signOutGoogle}>로그아웃</Button> : <Button onClick={signInWithGoogle} disabled={!authReady}>Google 로그인</Button>}
         </div>
       </div>
 
@@ -656,15 +683,13 @@ export default function TradingJournalApp() {
           </div>
           <div className="mt-4 flex gap-2">
             <Button onClick={applyFirebaseConfig}>설정 저장</Button>
-            <Button variant="outline" onClick={() => setConfigOpen(false)}>
-              닫기
-            </Button>
+            <Button variant="outline" onClick={() => setConfigOpen(false)}>닫기</Button>
           </div>
         </div>
       ) : null}
 
-      <div className="mx-auto grid max-w-7xl gap-4 xl:grid-cols-[360px,1fr]">
-        <div className="space-y-4">
+      <div className="mx-auto grid max-w-7xl gap-4 xl:grid-cols-[340px,minmax(0,1fr)] 2xl:grid-cols-[360px,minmax(0,1fr)]">
+        <aside className="space-y-4 xl:sticky xl:top-28 xl:self-start">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
@@ -672,15 +697,10 @@ export default function TradingJournalApp() {
                 <Button onClick={newEntry}>＋ 새 기록</Button>
               </div>
               <div className="mt-4 grid gap-3">
-                <Input value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="종목, 셋업, 태그 검색" />
+                <Input value={queryText} onChange={(e) => setQueryText(e.target.value)} placeholder="종목, 셋업, 태그 검색" />
                 <div className="flex flex-wrap gap-2">
                   {["전체", ...assetCategories].map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => setCategoryFilter(item)}
-                      className={`rounded-full px-3 py-1.5 text-xs transition ${categoryFilter === item ? "bg-cyan-400 text-slate-950" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
-                    >
+                    <button key={item} type="button" onClick={() => setCategoryFilter(item)} className={`rounded-full px-3 py-1.5 text-xs transition ${categoryFilter === item ? "bg-cyan-400 text-slate-950" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>
                       {item}
                     </button>
                   ))}
@@ -716,15 +736,10 @@ export default function TradingJournalApp() {
                 </div>
               </div>
 
-              <div className="max-h-[48vh] space-y-2 overflow-auto pr-1">
+              <div className="max-h-[38vh] space-y-2 overflow-auto pr-1 xl:max-h-[46vh]">
                 {filtered.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">아직 기록이 없어요. 첫 매매일지를 만들어보세요.</div> : null}
                 {filtered.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() => selectEntry(entry.id)}
-                    className={`w-full rounded-2xl border p-3 text-left transition ${selectedId === entry.id ? "border-cyan-400 bg-cyan-400/10 text-white shadow-lg shadow-cyan-950/20" : "border-slate-800 bg-slate-900/70 hover:border-slate-600"}`}
-                  >
+                  <button key={entry.id} type="button" onClick={() => selectEntry(entry.id)} className={`w-full rounded-2xl border p-3 text-left transition ${selectedId === entry.id ? "border-cyan-400 bg-cyan-400/10 text-white shadow-lg shadow-cyan-950/20" : "border-slate-800 bg-slate-900/70 hover:border-slate-600"}`}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <div className="font-semibold">{entry.market}</div>
@@ -746,189 +761,181 @@ export default function TradingJournalApp() {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </aside>
 
-        <div className="space-y-4">
+        <main className="min-w-0 space-y-4">
           <Card>
             <CardHeader>
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <CardTitle className="text-cyan-100">TradingView 복기 템플릿</CardTitle>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => deleteEntry(form.id)}>
-                    삭제
-                  </Button>
-                  <Button onClick={saveEntry} disabled={isSavingCloud}>
-                    {isSavingCloud ? "저장 중..." : "저장"}
-                  </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => deleteEntry(form.id)} disabled={!form.id}>삭제</Button>
+                  <Button onClick={saveEntry} disabled={isSavingCloud}>{isSavingCloud ? "저장 중..." : "저장"}</Button>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <section>
-                <h3 className="mb-3 text-lg font-semibold text-slate-100">TradingView 연결</h3>
-                <div className="grid gap-4 lg:grid-cols-[1fr,280px]">
-                  <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/60">
-                    <iframe title="TradingView" src={tvEmbedUrl} className="h-[420px] w-full border-0" />
+            <CardContent className="space-y-4">
+              <ResponsiveSection title="TradingView 연결" open={openSections.tv} onToggle={() => toggleSection("tv")}>
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),280px]">
+                  <div className="min-h-[280px] overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/60">
+                    <iframe title="TradingView" src={tvEmbedUrl} className="h-[340px] w-full border-0 md:h-[420px]" />
                   </div>
                   <div className="space-y-3 rounded-3xl border border-slate-800 bg-slate-900/60 p-4">
                     <div>
                       <div className="text-sm font-semibold text-slate-200">현재 심볼</div>
-                      <div className="mt-1 text-sm text-cyan-300">{activeSymbol}</div>
+                      <div className="mt-1 break-all text-sm text-cyan-300">{activeSymbol}</div>
                     </div>
                     <div>
                       <div className="text-sm font-semibold text-slate-200">트레이딩뷰 오픈</div>
-                      <a href={tvOpenUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-sm text-cyan-300 underline underline-offset-4">
-                        새 탭에서 열기
-                      </a>
+                      <a href={tvOpenUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-sm text-cyan-300 underline underline-offset-4">새 탭에서 열기</a>
                     </div>
                     <div className="text-xs text-slate-400">실시간 주문 연동은 브로커/TradingView 웹훅 서버가 따로 필요해서 여기서는 차트 링크, 심볼 동기화, 복기 중심으로 연결해뒀어.</div>
                   </div>
                 </div>
-              </section>
+              </ResponsiveSection>
 
-              <section>
-                <h3 className="mb-3 text-lg font-semibold text-slate-100">기본 정보</h3>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <Field label="날짜"><Input type="date" value={form.date} onChange={(e) => updateForm("date", e.target.value)} /></Field>
-                  <Field label="자산군">
-                    <select className="input" value={form.category} onChange={(e) => updateForm("category", e.target.value)}>
-                      {assetCategories.map((category) => (
-                        <option key={category} value={category}>
-                          {category}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="종목"><Input value={form.market} onChange={(e) => updateForm("market", e.target.value)} placeholder="BTCUSDT / 005930 / AAPL" /></Field>
-                  <Field label="방향">
-                    <select className="input" value={form.side} onChange={(e) => updateForm("side", e.target.value)}>
-                      <option value="Long">Long</option>
-                      <option value="Short">Short</option>
-                    </select>
-                  </Field>
-                  <Field label="셋업">
-                    <select className="input" value={form.setup} onChange={(e) => updateForm("setup", e.target.value)}>
-                      <option value="반등매매">반등매매</option>
-                      <option value="돌파매매">돌파매매</option>
-                      <option value="눌림목">눌림목</option>
-                      <option value="추세추종">추세추종</option>
-                      <option value="역추세">역추세</option>
-                    </select>
-                  </Field>
-                  <Field label="타임프레임">
-                    <select className="input" value={form.timeframe} onChange={(e) => updateForm("timeframe", e.target.value)}>
-                      <option value="5M">5M</option>
-                      <option value="15M">15M</option>
-                      <option value="1H">1H</option>
-                      <option value="4H">4H</option>
-                      <option value="1D">1D</option>
-                    </select>
-                  </Field>
-                  <Field label="상태">
-                    <select className="input" value={form.status} onChange={(e) => updateForm("status", e.target.value)}>
-                      <option value="대기">대기</option>
-                      <option value="진행중">진행중</option>
-                      <option value="종료">종료</option>
-                    </select>
-                  </Field>
-                  <Field label="스토캐스틱">
-                    <select className="input" value={form.stochastic} onChange={(e) => updateForm("stochastic", e.target.value)}>
-                      <option value="과매도">과매도</option>
-                      <option value="중립">중립</option>
-                      <option value="과매수">과매수</option>
-                    </select>
-                  </Field>
-                  <Field label="시장 상태">
-                    <select className="input" value={form.marketCondition} onChange={(e) => updateForm("marketCondition", e.target.value)}>
-                      <option value="상승">상승</option>
-                      <option value="하락">하락</option>
-                      <option value="횡보">횡보</option>
-                    </select>
-                  </Field>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="mb-3 text-lg font-semibold text-slate-100">가격 / 손익비</h3>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                  <Field label="진입가"><Input value={form.entryPrice} onChange={(e) => updateForm("entryPrice", e.target.value)} /></Field>
-                  <Field label="손절가"><Input value={form.stopPrice} onChange={(e) => updateForm("stopPrice", e.target.value)} /></Field>
-                  <Field label="목표가"><Input value={form.targetPrice} onChange={(e) => updateForm("targetPrice", e.target.value)} /></Field>
-                  <Field label="청산가"><Input value={form.exitPrice} onChange={(e) => updateForm("exitPrice", e.target.value)} /></Field>
-                  <Field label="수익률(%)"><Input value={form.pnl} onChange={(e) => updateForm("pnl", e.target.value)} /></Field>
-                </div>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <MetricCard label="리스크" value={form.riskPct ? `${form.riskPct}%` : "-"} tone="rose" />
-                  <MetricCard label="리워드" value={form.rewardPct ? `${form.rewardPct}%` : "-"} tone="cyan" />
-                  <MetricCard label="손익비(R:R)" value={form.riskReward ? `1 : ${form.riskReward}` : "-"} tone="violet" />
-                </div>
-              </section>
-
-              <section>
-                <h3 className="mb-3 text-lg font-semibold text-slate-100">스크린샷</h3>
-                <div className="grid gap-4 lg:grid-cols-[280px,1fr]">
-                  <label className="flex min-h-[220px] cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-slate-700 bg-slate-900/60 p-4 text-center hover:border-cyan-400 hover:bg-slate-900">
-                    <span className="mb-3 text-3xl">📷</span>
-                    <span className="text-sm font-medium text-slate-200">차트 스크린샷 업로드</span>
-                    <span className="mt-1 text-xs text-slate-400">로그인 상태면 클라우드 스토리지에 저장돼.</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={handleScreenshotChange} />
-                  </label>
-                  <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-3">
-                    {form.screenshot ? <img src={form.screenshot} alt="trade screenshot" className="h-full max-h-[360px] w-full rounded-2xl object-contain" /> : <div className="flex h-full min-h-[220px] items-center justify-center rounded-2xl bg-slate-950/70 text-sm text-slate-400">아직 첨부된 스크린샷이 없습니다.</div>}
-                    {fileError ? <div className="mt-3 text-sm text-rose-300">{fileError}</div> : null}
+              <div className="grid gap-4 2xl:grid-cols-2">
+                <ResponsiveSection title="기본 정보" open={openSections.basic} onToggle={() => toggleSection("basic")}>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="날짜"><Input type="date" value={form.date} onChange={(e) => updateForm("date", e.target.value)} /></Field>
+                    <Field label="자산군"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.category} onChange={(e) => updateForm("category", e.target.value)}>{assetCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select></Field>
+                    <Field label="종목"><Input value={form.market} onChange={(e) => updateForm("market", e.target.value)} placeholder="BTCUSDT / 005930 / AAPL" /></Field>
+                    <Field label="방향"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.side} onChange={(e) => updateForm("side", e.target.value)}><option value="Long">Long</option><option value="Short">Short</option></select></Field>
+                    <Field label="셋업"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.setup} onChange={(e) => updateForm("setup", e.target.value)}><option value="반등매매">반등매매</option><option value="돌파매매">돌파매매</option><option value="눌림목">눌림목</option><option value="추세추종">추세추종</option><option value="역추세">역추세</option></select></Field>
+                    <Field label="타임프레임"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.timeframe} onChange={(e) => updateForm("timeframe", e.target.value)}><option value="5M">5M</option><option value="15M">15M</option><option value="1H">1H</option><option value="4H">4H</option><option value="1D">1D</option></select></Field>
+                    <Field label="상태"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.status} onChange={(e) => updateForm("status", e.target.value)}><option value="대기">대기</option><option value="진행중">진행중</option><option value="종료">종료</option></select></Field>
+                    <Field label="스토캐스틱"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.stochastic} onChange={(e) => updateForm("stochastic", e.target.value)}><option value="과매도">과매도</option><option value="중립">중립</option><option value="과매수">과매수</option></select></Field>
+                    <Field label="시장 상태"><select className="w-full rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" value={form.marketCondition} onChange={(e) => updateForm("marketCondition", e.target.value)}><option value="상승">상승</option><option value="하락">하락</option><option value="횡보">횡보</option></select></Field>
                   </div>
-                </div>
-              </section>
+                </ResponsiveSection>
 
-              <section>
-                <h3 className="mb-3 text-lg font-semibold text-slate-100">진입 전 메모</h3>
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <Field label="진입 근거"><Textarea rows={5} value={form.thesis} onChange={(e) => updateForm("thesis", e.target.value)} placeholder="예: 스토캐스틱 과매도 + 240MA 근접 + FVG 하단 반응" /></Field>
-                  <Field label="체결 메모 / 실행 이유"><Textarea rows={5} value={form.executionNote} onChange={(e) => updateForm("executionNote", e.target.value)} placeholder="예: 진입은 좋았지만 1차 반등에서 확신 부족" /></Field>
-                  <Field label="시나리오 A"><Textarea rows={4} value={form.scenarioA} onChange={(e) => updateForm("scenarioA", e.target.value)} placeholder="예: 지지 확인 후 반등 지속" /></Field>
-                  <Field label="시나리오 B"><Textarea rows={4} value={form.scenarioB} onChange={(e) => updateForm("scenarioB", e.target.value)} placeholder="예: 저점 스윕 후 재차 회복" /></Field>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="mb-3 text-lg font-semibold text-slate-100">복기</h3>
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <Field label="결과 리뷰"><Textarea rows={5} value={form.resultReview} onChange={(e) => updateForm("resultReview", e.target.value)} /></Field>
-                  <Field label="실수"><Textarea rows={5} value={form.mistake} onChange={(e) => updateForm("mistake", e.target.value)} /></Field>
-                  <Field label="배운 점"><Textarea rows={4} value={form.lesson} onChange={(e) => updateForm("lesson", e.target.value)} /></Field>
-                  <div className="grid gap-3">
-                    <Field label="외부 흐름"><Input value={form.externalFlow} onChange={(e) => updateForm("externalFlow", e.target.value)} /></Field>
-                    <Field label="TradingView 링크"><Input value={form.tvLink} onChange={(e) => updateForm("tvLink", e.target.value)} placeholder="붙여넣으면 기본 링크 대신 사용" /></Field>
-                    <Field label="태그"><Input value={form.tags} onChange={(e) => updateForm("tags", e.target.value)} /></Field>
+                <ResponsiveSection title="가격 / 손익비" open={openSections.price} onToggle={() => toggleSection("price")}>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="진입가"><Input value={form.entryPrice} onChange={(e) => updateForm("entryPrice", e.target.value)} /></Field>
+                    <Field label="손절가"><Input value={form.stopPrice} onChange={(e) => updateForm("stopPrice", e.target.value)} /></Field>
+                    <Field label="목표가"><Input value={form.targetPrice} onChange={(e) => updateForm("targetPrice", e.target.value)} /></Field>
+                    <Field label="청산가"><Input value={form.exitPrice} onChange={(e) => updateForm("exitPrice", e.target.value)} /></Field>
+                    <Field label="수익률(%)"><Input value={form.pnl} onChange={(e) => updateForm("pnl", e.target.value)} /></Field>
                   </div>
-                </div>
-              </section>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <MetricCard label="리스크" value={form.riskPct ? `${form.riskPct}%` : "-"} tone="rose" />
+                    <MetricCard label="리워드" value={form.rewardPct ? `${form.rewardPct}%` : "-"} tone="cyan" />
+                    <MetricCard label="손익비(R:R)" value={form.riskReward ? `1 : ${form.riskReward}` : "-"} tone="violet" />
+                  </div>
+                </ResponsiveSection>
+              </div>
 
-              <section>
-                <h3 className="mb-3 text-lg font-semibold text-slate-100">월별 / 일별 통계</h3>
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <Card className="border-slate-800 bg-slate-900/60"><CardContent className="p-4"><div className="mb-3 text-sm font-semibold text-slate-200">최근 일별 통계</div><div className="space-y-2">{dailyStats.length === 0 ? <div className="text-sm text-slate-400">종료된 매매가 아직 없습니다.</div> : null}{dailyStats.map((item) => <div key={item.date} className="flex items-center justify-between rounded-2xl bg-slate-950/70 px-3 py-2 text-sm"><div><div className="font-medium text-slate-200">{item.date}</div><div className="text-xs text-slate-400">총 {item.count}건 · 승 {item.win} · 손 {item.loss}</div></div><div className={item.pnl >= 0 ? "text-cyan-300" : "text-rose-300"}>{formatSigned(item.pnl)}</div></div>)}</div></CardContent></Card>
-                  <Card className="border-slate-800 bg-slate-900/60"><CardContent className="p-4"><div className="mb-3 text-sm font-semibold text-slate-200">월별 통계</div><div className="space-y-2 max-h-[300px] overflow-auto pr-1">{monthlyStats.length === 0 ? <div className="text-sm text-slate-400">종료된 매매가 아직 없습니다.</div> : null}{monthlyStats.map((item) => <div key={item.month} className="flex items-center justify-between rounded-2xl bg-slate-950/70 px-3 py-2 text-sm"><div><div className="font-medium text-slate-200">{item.month}</div><div className="text-xs text-slate-400">총 {item.count}건 · 승 {item.win} · 손 {item.loss}</div></div><div className={item.pnl >= 0 ? "text-cyan-300" : "text-rose-300"}>{formatSigned(item.pnl)}</div></div>)}</div></CardContent></Card>
-                </div>
-              </section>
+              <div className="grid gap-4 2xl:grid-cols-[1.1fr,0.9fr]">
+                <ResponsiveSection title="스크린샷" open={openSections.screenshot} onToggle={() => toggleSection("screenshot")}>
+                  <div className="grid gap-4 lg:grid-cols-[220px,minmax(0,1fr)]">
+                    <label className="flex min-h-[220px] cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-slate-700 bg-slate-900/60 p-4 text-center hover:border-cyan-400 hover:bg-slate-900">
+                      <span className="mb-3 text-3xl">📷</span>
+                      <span className="text-sm font-medium text-slate-200">차트 스크린샷 업로드</span>
+                      <span className="mt-1 text-xs text-slate-400">로그인 상태면 클라우드 스토리지에 저장돼.</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={handleScreenshotChange} />
+                    </label>
+                    <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-3">
+                      {form.screenshot ? <img src={form.screenshot} alt="trade screenshot" className="h-full max-h-[360px] w-full rounded-2xl object-contain" /> : <div className="flex h-full min-h-[220px] items-center justify-center rounded-2xl bg-slate-950/70 text-sm text-slate-400">아직 첨부된 스크린샷이 없습니다.</div>}
+                      {fileError ? <div className="mt-3 text-sm text-rose-300">{fileError}</div> : null}
+                    </div>
+                  </div>
+                </ResponsiveSection>
 
-              <section>
-                <h3 className="mb-3 text-lg font-semibold text-slate-100">TradingView에 붙일 텍스트</h3>
+                <ResponsiveSection title="진입 전 메모" open={openSections.notes} onToggle={() => toggleSection("notes")}>
+                  <div className="grid gap-4">
+                    <Field label="진입 근거"><Textarea rows={4} value={form.thesis} onChange={(e) => updateForm("thesis", e.target.value)} placeholder="예: 스토캐스틱 과매도 + 240MA 근접 + FVG 하단 반응" /></Field>
+                    <Field label="체결 메모 / 실행 이유"><Textarea rows={4} value={form.executionNote} onChange={(e) => updateForm("executionNote", e.target.value)} placeholder="예: 진입은 좋았지만 1차 반등에서 확신 부족" /></Field>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field label="시나리오 A"><Textarea rows={4} value={form.scenarioA} onChange={(e) => updateForm("scenarioA", e.target.value)} placeholder="예: 지지 확인 후 반등 지속" /></Field>
+                      <Field label="시나리오 B"><Textarea rows={4} value={form.scenarioB} onChange={(e) => updateForm("scenarioB", e.target.value)} placeholder="예: 저점 스윕 후 재차 회복" /></Field>
+                    </div>
+                  </div>
+                </ResponsiveSection>
+              </div>
+
+              <div className="grid gap-4 2xl:grid-cols-[1fr,1fr]">
+                <ResponsiveSection title="복기" open={openSections.review} onToggle={() => toggleSection("review")}>
+                  <div className="grid gap-4">
+                    <Field label="결과 리뷰"><Textarea rows={4} value={form.resultReview} onChange={(e) => updateForm("resultReview", e.target.value)} /></Field>
+                    <Field label="실수"><Textarea rows={4} value={form.mistake} onChange={(e) => updateForm("mistake", e.target.value)} /></Field>
+                    <Field label="배운 점"><Textarea rows={4} value={form.lesson} onChange={(e) => updateForm("lesson", e.target.value)} /></Field>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <Field label="외부 흐름"><Input value={form.externalFlow} onChange={(e) => updateForm("externalFlow", e.target.value)} /></Field>
+                      <Field label="TradingView 링크"><Input value={form.tvLink} onChange={(e) => updateForm("tvLink", e.target.value)} placeholder="붙여넣으면 기본 링크 대신 사용" /></Field>
+                      <Field label="태그"><Input value={form.tags} onChange={(e) => updateForm("tags", e.target.value)} /></Field>
+                    </div>
+                  </div>
+                </ResponsiveSection>
+
+                <ResponsiveSection title="월별 / 일별 통계" open={openSections.stats} onToggle={() => toggleSection("stats")}>
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <Card className="border-slate-800 bg-slate-900/60">
+                      <CardContent className="p-4">
+                        <div className="mb-3 text-sm font-semibold text-slate-200">최근 일별 통계</div>
+                        <div className="space-y-2">
+                          {dailyStats.length === 0 ? <div className="text-sm text-slate-400">종료된 매매가 아직 없습니다.</div> : null}
+                          {dailyStats.map((item) => (
+                            <div key={item.date} className="flex items-center justify-between rounded-2xl bg-slate-950/70 px-3 py-2 text-sm">
+                              <div>
+                                <div className="font-medium text-slate-200">{item.date}</div>
+                                <div className="text-xs text-slate-400">총 {item.count}건 · 승 {item.win} · 손 {item.loss}</div>
+                              </div>
+                              <div className={item.pnl >= 0 ? "text-cyan-300" : "text-rose-300"}>{formatSigned(item.pnl)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="border-slate-800 bg-slate-900/60">
+                      <CardContent className="p-4">
+                        <div className="mb-3 text-sm font-semibold text-slate-200">월별 통계</div>
+                        <div className="max-h-[280px] space-y-2 overflow-auto pr-1">
+                          {monthlyStats.length === 0 ? <div className="text-sm text-slate-400">종료된 매매가 아직 없습니다.</div> : null}
+                          {monthlyStats.map((item) => (
+                            <div key={item.month} className="flex items-center justify-between rounded-2xl bg-slate-950/70 px-3 py-2 text-sm">
+                              <div>
+                                <div className="font-medium text-slate-200">{item.month}</div>
+                                <div className="text-xs text-slate-400">총 {item.count}건 · 승 {item.win} · 손 {item.loss}</div>
+                              </div>
+                              <div className={item.pnl >= 0 ? "text-cyan-300" : "text-rose-300"}>{formatSigned(item.pnl)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </ResponsiveSection>
+              </div>
+
+              <ResponsiveSection title="TradingView에 붙일 텍스트" open={openSections.snippets} onToggle={() => toggleSection("snippets")}>
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <Card className="border-slate-800 bg-slate-900/60"><CardContent className="p-4"><div className="mb-2 text-sm font-semibold text-cyan-200">진입 전</div><pre className="whitespace-pre-wrap text-sm text-slate-300">{`[진입 이유]\n- ${form.thesis || ""}\n\n[시장 상태]\n- ${form.category} / ${form.marketCondition} / ${form.stochastic}\n- ${form.externalFlow || ""}\n\n[시나리오]\nA: ${form.scenarioA || ""}\nB: ${form.scenarioB || ""}\n\n[손절]\n- ${form.stopPrice || ""}\n\n[목표 / 손익비]\n- 목표가: ${form.targetPrice || ""}\n- 손익비: ${form.riskReward ? `1:${form.riskReward}` : ""}`}</pre></CardContent></Card>
-                  <Card className="border-slate-800 bg-slate-900/60"><CardContent className="p-4"><div className="mb-2 text-sm font-semibold text-cyan-200">청산 후</div><pre className="whitespace-pre-wrap text-sm text-slate-300">{`[결과]\n- ${form.pnl ? `${form.pnl}%` : ""}\n- ${form.resultReview || ""}\n\n[실수]\n- ${form.mistake || ""}\n\n[배운 점]\n- ${form.lesson || ""}`}</pre></CardContent></Card>
+                  <Card className="border-slate-800 bg-slate-900/60">
+                    <CardContent className="p-4">
+                      <div className="mb-2 text-sm font-semibold text-cyan-200">진입 전</div>
+                      <pre className="whitespace-pre-wrap text-sm text-slate-300">{`[진입 이유]\n- ${form.thesis || ""}\n\n[시장 상태]\n- ${form.category} / ${form.marketCondition} / ${form.stochastic}\n- ${form.externalFlow || ""}\n\n[시나리오]\nA: ${form.scenarioA || ""}\nB: ${form.scenarioB || ""}\n\n[손절]\n- ${form.stopPrice || ""}\n\n[목표 / 손익비]\n- 목표가: ${form.targetPrice || ""}\n- 손익비: ${form.riskReward ? `1:${form.riskReward}` : ""}`}</pre>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-slate-800 bg-slate-900/60">
+                    <CardContent className="p-4">
+                      <div className="mb-2 text-sm font-semibold text-cyan-200">청산 후</div>
+                      <pre className="whitespace-pre-wrap text-sm text-slate-300">{`[결과]\n- ${form.pnl ? `${form.pnl}%` : ""}\n- ${form.resultReview || ""}\n\n[실수]\n- ${form.mistake || ""}\n\n[배운 점]\n- ${form.lesson || ""}`}</pre>
+                    </CardContent>
+                  </Card>
                 </div>
-              </section>
+              </ResponsiveSection>
 
-              <section>
-                <h3 className="mb-3 text-lg font-semibold text-slate-100">검증</h3>
+              <ResponsiveSection title="검증" open={openSections.tests} onToggle={() => toggleSection("tests")}>
                 <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                  {tests.map((test) => <div key={test.name} className={`rounded-2xl border px-3 py-2 text-sm ${test.ok ? "border-cyan-500/20 bg-cyan-500/10 text-cyan-200" : "border-rose-500/20 bg-rose-500/10 text-rose-200"}`}>{test.ok ? "통과" : "실패"} · {test.name}</div>)}
+                  {tests.map((test) => (
+                    <div key={test.name} className={`rounded-2xl border px-3 py-2 text-sm ${test.ok ? "border-cyan-500/20 bg-cyan-500/10 text-cyan-200" : "border-rose-500/20 bg-rose-500/10 text-rose-200"}`}>
+                      {test.ok ? "통과" : "실패"} · {test.name}
+                    </div>
+                  ))}
                 </div>
-              </section>
+              </ResponsiveSection>
             </CardContent>
           </Card>
-        </div>
+        </main>
       </div>
     </div>
   );
