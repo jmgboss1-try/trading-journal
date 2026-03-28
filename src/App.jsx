@@ -40,19 +40,23 @@ function createDefaultEntry() {
     category: "BTC",
     market: "BTCUSDT",
     side: "Long",
-    setup: "반등매매",
     timeframe: "1H",
+    strategy: "반등매매",
     entryPrice: "",
     stopPrice: "",
     targetPrice: "",
     exitPrice: "",
+    leverage: "",
     pnl: "",
     riskReward: "",
     riskPct: "",
     rewardPct: "",
     status: "대기",
+    stochasticState: "중립",
+    rsiState: "없음",
+    maState: "혼조",
+    analysisMemo: "",
     thesis: "",
-    note: "",
     review: "",
     screenshot: "",
     tags: "",
@@ -1078,26 +1082,25 @@ export default function App() {
               <div className="main-grid">
                 <div className="left-stack">
                   <div className="two-col">
-                    <Section title="기본 정보">
+                    <Section title="BTC 기본 정보">
                       <div className="form-grid">
-                        <Field label="날짜"><Input type="date" value={form.date} onChange={(e) => updateForm("date", e.target.value)} /></Field>
-                        <Field label="자산군"><Select value={form.category} onChange={(e) => updateForm("category", e.target.value)}>{assetCategories.map((category) => <option key={category} value={category}>{category}</option>)}</Select></Field>
-                        <Field label="종목"><Input value={form.market} onChange={(e) => updateForm("market", e.target.value)} placeholder="BTCUSDT / 005930 / AAPL" /></Field>
+                        <Field label="종목"><Input value={form.market} onChange={(e) => updateForm("market", e.target.value)} placeholder="BTCUSDT / ETHUSDT" /></Field>
                         <Field label="방향"><Select value={form.side} onChange={(e) => updateForm("side", e.target.value)}><option value="Long">Long</option><option value="Short">Short</option></Select></Field>
-                        <Field label="셋업"><Input value={form.setup} onChange={(e) => updateForm("setup", e.target.value)} /></Field>
                         <Field label="타임프레임"><Select value={form.timeframe} onChange={(e) => updateForm("timeframe", e.target.value)}><option value="5M">5M</option><option value="15M">15M</option><option value="1H">1H</option><option value="4H">4H</option><option value="1D">1D</option></Select></Field>
+                        <Field label="전략"><Select value={form.strategy} onChange={(e) => updateForm("strategy", e.target.value)}><option value="반등매매">반등매매</option><option value="돌파매매">돌파매매</option><option value="추세추종">추세추종</option><option value="눌림목">눌림목</option><option value="스캘프">스캘프</option><option value="기타">기타</option></Select></Field>
+                        <Field label="날짜"><Input type="date" value={form.date} onChange={(e) => updateForm("date", e.target.value)} /></Field>
                         <Field label="상태"><Select value={form.status} onChange={(e) => updateForm("status", e.target.value)}><option value="대기">대기</option><option value="진행중">진행중</option><option value="종료">종료</option></Select></Field>
-                        <Field label="태그"><Input value={form.tags} onChange={(e) => updateForm("tags", e.target.value)} placeholder="예: 눌림목, FVG" /></Field>
                       </div>
                     </Section>
 
-                    <Section title="가격 / 계산">
+                    <Section title="BTC 포지션">
                       <div className="form-grid">
                         <Field label="진입가"><Input value={form.entryPrice} onChange={(e) => updateForm("entryPrice", e.target.value)} /></Field>
                         <Field label="손절가"><Input value={form.stopPrice} onChange={(e) => updateForm("stopPrice", e.target.value)} /></Field>
                         <Field label="목표가"><Input value={form.targetPrice} onChange={(e) => updateForm("targetPrice", e.target.value)} /></Field>
                         <Field label="청산가"><Input value={form.exitPrice} onChange={(e) => updateForm("exitPrice", e.target.value)} /></Field>
-                        <Field label="수익률(%)"><Input value={form.pnl} onChange={(e) => updateForm("pnl", e.target.value)} /></Field>
+                        <Field label="레버리지"><Input value={form.leverage} onChange={(e) => updateForm("leverage", e.target.value)} placeholder="예: 5x" /></Field>
+                        <Field label="태그"><Input value={form.tags} onChange={(e) => updateForm("tags", e.target.value)} placeholder="예: FVG, sweep" /></Field>
                       </div>
                       <div className="metrics-grid">
                         <MetricCard label="리스크" value={form.riskPct ? `${form.riskPct}%` : "-"} tone="rose" />
@@ -1108,15 +1111,22 @@ export default function App() {
                   </div>
 
                   <div className="two-col">
-                    <Section title="진입 메모">
-                      <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
-                        <Field label="진입 근거"><Textarea rows={5} value={form.thesis} onChange={(e) => updateForm("thesis", e.target.value)} placeholder="왜 들어갔는지 적기" /></Field>
-                        <Field label="추가 메모"><Textarea rows={5} value={form.note} onChange={(e) => updateForm("note", e.target.value)} placeholder="심리, 시나리오, 외부 변수" /></Field>
+                    <Section title="BTC 분석">
+                      <div className="form-grid">
+                        <Field label="스토캐스틱 상태"><Select value={form.stochasticState} onChange={(e) => updateForm("stochasticState", e.target.value)}><option value="과매도">과매도</option><option value="중립">중립</option><option value="과매수">과매수</option></Select></Field>
+                        <Field label="RSI 상태"><Select value={form.rsiState} onChange={(e) => updateForm("rsiState", e.target.value)}><option value="없음">없음</option><option value="상승 다이버전스">상승 다이버전스</option><option value="하락 다이버전스">하락 다이버전스</option><option value="히든 상승 다이버전스">히든 상승 다이버전스</option><option value="히든 하락 다이버전스">히든 하락 다이버전스</option><option value="과매도">과매도</option><option value="과매수">과매수</option></Select></Field>
+                        <Field label="이평선 상태"><Select value={form.maState} onChange={(e) => updateForm("maState", e.target.value)}><option value="상승 정배열">상승 정배열</option><option value="하락 역배열">하락 역배열</option><option value="혼조">혼조</option><option value="지지 받는 중">지지 받는 중</option><option value="저항 받는 중">저항 받는 중</option><option value="돌파 직전">돌파 직전</option></Select></Field>
+                      </div>
+                      <div style={{ marginTop: 12 }}>
+                        <Field label="분석 메모"><Textarea rows={8} value={form.analysisMemo} onChange={(e) => updateForm("analysisMemo", e.target.value)} placeholder="지지/저항, 구조, 다이버전스 해석 등을 기록" /></Field>
                       </div>
                     </Section>
 
-                    <Section title="복기">
-                      <Field label="복기 메모"><Textarea rows={11} value={form.review} onChange={(e) => updateForm("review", e.target.value)} placeholder="결과, 실수, 배운 점" /></Field>
+                    <Section title="기록">
+                      <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
+                        <Field label="진입 근거"><Textarea rows={5} value={form.thesis} onChange={(e) => updateForm("thesis", e.target.value)} placeholder="왜 들어갔는지, 어떤 근거였는지 기록" /></Field>
+                        <Field label="복기 메모"><Textarea rows={9} value={form.review} onChange={(e) => updateForm("review", e.target.value)} placeholder="결과, 실수, 배운 점" /></Field>
+                      </div>
                     </Section>
                   </div>
                 </div>
