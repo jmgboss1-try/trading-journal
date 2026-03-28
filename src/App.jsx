@@ -839,6 +839,8 @@ export default function App() {
         }
         .control {
           width: 100%;
+          min-width: 0;
+          min-height: 54px;
           border-radius: 18px;
           border: 1px solid rgba(255,255,255,0.12);
           background: rgba(2, 6, 23, 0.55);
@@ -853,6 +855,10 @@ export default function App() {
           box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18);
           background: rgba(2, 6, 23, 0.72);
         }
+        .control[type="date"] {
+          font-size: 13px;
+          padding-right: 8px;
+        }
         .control::placeholder { color: #64748b; }
         .textarea { min-height: 140px; resize: vertical; }
         .metrics-grid {
@@ -862,6 +868,8 @@ export default function App() {
           margin-top: 12px;
         }
         .metric-card {
+          min-width: 0;
+          overflow: hidden;
           border-radius: 20px;
           padding: 14px 16px;
           border: 1px solid rgba(255,255,255,0.08);
@@ -870,8 +878,19 @@ export default function App() {
         .metric-cyan { background: rgba(34,211,238,0.08); border-color: rgba(34,211,238,0.16); }
         .metric-rose { background: rgba(244,63,94,0.08); border-color: rgba(244,63,94,0.16); }
         .metric-violet { background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.16); }
-        .metric-label { font-size: 12px; color: #94a3b8; }
-        .metric-value { margin-top: 6px; font-size: 22px; font-weight: 700; color: #f8fafc; }
+        .metric-label {
+          font-size: 12px;
+          color: #94a3b8;
+          white-space: nowrap;
+        }
+        .metric-value {
+          margin-top: 8px;
+          font-size: clamp(16px, 1.9vw, 22px);
+          line-height: 1.1;
+          font-weight: 700;
+          color: #f8fafc;
+          word-break: break-word;
+        }
         .upload-box {
           min-height: 168px;
           border-radius: 20px;
@@ -935,23 +954,30 @@ export default function App() {
         }
         .calendar-empty { min-height: 74px; }
         .calendar-cell {
-          min-height: 74px;
+          min-height: 86px;
           border-radius: 16px;
           border: 1px solid rgba(255,255,255,0.06);
           background: rgba(2,6,23,0.36);
           color: #e2e8f0;
-          padding: 8px;
+          padding: 10px 8px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
           text-align: left;
           cursor: pointer;
+          overflow: hidden;
         }
         .calendar-profit { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.24); }
         .calendar-loss { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.24); }
         .calendar-selected { box-shadow: 0 0 0 2px rgba(34,211,238,0.45) inset; }
         .calendar-day { font-size: 12px; color: #cbd5e1; }
-        .calendar-pnl { font-size: 12px; font-weight: 700; }
+        .calendar-pnl {
+          font-size: 11px;
+          line-height: 1.15;
+          font-weight: 700;
+          text-align: right;
+          word-break: break-word;
+        }
         .daily-list {
           display: grid;
           gap: 10px;
@@ -978,7 +1004,7 @@ export default function App() {
           .topbar-inner { flex-direction: row; align-items: center; justify-content: space-between; }
           .content-head { flex-direction: row; align-items: center; justify-content: space-between; }
           .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .metrics-grid { grid-template-columns: repeat(3, minmax(110px, 1fr)); }
           .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .config-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
