@@ -47,6 +47,8 @@ function createDefaultEntry() {
     targetPrice: "",
     exitPrice: "",
     leverage: "",
+    entryAmount: "",
+    realizedPnlAmount: "",
     pnl: "",
     riskReward: "",
     riskPct: "",
@@ -168,6 +170,13 @@ function formatCalendarPnL(value) {
   return `${num > 0 ? "+" : ""}${num.toFixed(1)}%`;
 }
 
+function formatMoney(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num === 0) return "";
+  return `${num > 0 ? "+" : ""}${num.toLocaleString()}`;
+}${num.toFixed(1)}%`;
+}
+
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -209,9 +218,12 @@ function buildMonthlyCalendarData(entries, year, monthIndex) {
   entries.forEach((entry) => {
     if (entry.status !== "종료") return;
     const key = String(entry.date || "").trim();
-    const pnl = Number(entry.pnl);
-    if (!key || !Number.isFinite(pnl)) return;
-    byDate[key] = (byDate[key] || 0) + pnl;
+    const pnlPct = Number(entry.pnl);
+    const pnlAmount = Number(entry.realizedPnlAmount);
+    if (!key) return;
+    if (!byDate[key]) byDate[key] = { percent: 0, amount: 0 };
+    if (Number.isFinite(pnlPct)) byDate[key].percent += pnlPct;
+    if (Number.isFinite(pnlAmount)) byDate[key].amount += pnlAmount;
   });
 
   const cells = [];
@@ -219,7 +231,8 @@ function buildMonthlyCalendarData(entries, year, monthIndex) {
 
   for (let day = 1; day <= lastDate; day += 1) {
     const key = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    cells.push({ day, key, value: byDate[key] || 0 });
+    const dayData = byDate[key] || { percent: 0, amount: 0 };
+    cells.push({ day, key, percent: dayData.percent, amount: dayData.amount });
   }
 
   return cells;
@@ -319,12 +332,13 @@ function CalendarGrid({ cells, selectedDate, onSelectDate }) {
       <div className="calendar-grid">
         {cells.map((cell, index) => {
           if (!cell) return <div key={`blank-${index}`} className="calendar-empty" />;
-          const tone = cell.value > 0 ? "calendar-profit" : cell.value < 0 ? "calendar-loss" : "";
+          const tone = cell.amount > 0 || cell.percent > 0 ? "calendar-profit" : cell.amount < 0 || cell.percent < 0 ? "calendar-loss" : "";
           const selected = selectedDate === cell.key ? "calendar-selected" : "";
           return (
             <button key={cell.key} type="button" onClick={() => onSelectDate(cell.key)} className={`calendar-cell ${tone} ${selected}`}>
               <div className="calendar-day">{cell.day}</div>
-              <div className="calendar-pnl">{formatCalendarPnL(cell.value)}</div>
+              <div className="calendar-amount">{formatMoney(cell.amount)}</div>
+              <div className="calendar-pnl">{formatCalendarPnL(cell.percent)}</div>
             </button>
           );
         })}
@@ -618,7 +632,7 @@ export default function App() {
         }
         .brand-title {
           margin: 0;
-          font-size: 34px;
+          font-size: 28px;
           line-height: 1.05;
           font-weight: 700;
           letter-spacing: -0.04em;
@@ -652,7 +666,7 @@ export default function App() {
           gap: 16px;
         }
         .sidebar, .content { min-width: 0; }
-        .card-pad { padding: 18px; }
+        .card-pad { padding: 16px; }
         .stats-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -699,10 +713,10 @@ export default function App() {
           color: #e2e8f0;
         }
         .list-title, .section-title {
-          font-size: 18px;
+          font-size: 16px;
           font-weight: 700;
           color: #f8fafc;
-          margin-bottom: 14px;
+          margin-bottom: 12px;
         }
         .list-controls {
           display: grid;
@@ -778,7 +792,7 @@ export default function App() {
           padding: 12px 14px;
           font-size: 14px;
         }
-        .content-card { padding: 20px; }
+        .content-card { padding: 16px; }
         .content-head {
           display: flex;
           flex-direction: column;
@@ -818,10 +832,10 @@ export default function App() {
           grid-template-columns: 1fr;
         }
         .section-card {
-          border-radius: 24px;
+          border-radius: 22px;
           border: 1px solid rgba(255,255,255,0.06);
           background: rgba(0,0,0,0.16);
-          padding: 18px;
+          padding: 14px;
         }
         .section-title { margin: 0 0 14px; }
         .form-grid {
@@ -832,21 +846,21 @@ export default function App() {
         .field { display: block; }
         .field-label {
           display: block;
-          margin-bottom: 6px;
-          font-size: 13px;
+          margin-bottom: 5px;
+          font-size: 12px;
           font-weight: 600;
           color: #cbd5e1;
         }
         .control {
           width: 100%;
           min-width: 0;
-          min-height: 54px;
-          border-radius: 18px;
+          min-height: 46px;
+          border-radius: 16px;
           border: 1px solid rgba(255,255,255,0.12);
           background: rgba(2, 6, 23, 0.55);
           color: #f8fafc;
-          padding: 12px 14px;
-          font-size: 14px;
+          padding: 10px 12px;
+          font-size: 13px;
           outline: none;
           transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
         }
@@ -855,8 +869,16 @@ export default function App() {
           box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18);
           background: rgba(2, 6, 23, 0.72);
         }
+        .control[type="date"] {
+          cursor: pointer;
+        }
+        .control:focus {
+          border-color: rgba(34, 211, 238, 0.8);
+          box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18);
+          background: rgba(2, 6, 23, 0.72);
+        }
         .control::placeholder { color: #64748b; }
-        .textarea { min-height: 140px; resize: vertical; }
+        .textarea { min-height: 112px; resize: vertical; }
         .metrics-grid {
           display: grid;
           gap: 12px;
@@ -865,8 +887,8 @@ export default function App() {
         }
         .metric-card {
           min-width: 0;
-          border-radius: 20px;
-          padding: 12px 12px 14px;
+          border-radius: 18px;
+          padding: 10px 10px 12px;
           border: 1px solid rgba(255,255,255,0.08);
           background: rgba(255,255,255,0.04);
         }
@@ -874,14 +896,14 @@ export default function App() {
         .metric-rose { background: rgba(244,63,94,0.08); border-color: rgba(244,63,94,0.16); }
         .metric-violet { background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.16); }
         .metric-label {
-          font-size: 11px;
+          font-size: 10px;
           color: #94a3b8;
-          line-height: 1.2;
+          line-height: 1.15;
         }
         .metric-value {
-          margin-top: 8px;
-          font-size: 16px;
-          line-height: 1.15;
+          margin-top: 6px;
+          font-size: 14px;
+          line-height: 1.1;
           font-weight: 700;
           color: #f8fafc;
           white-space: nowrap;
@@ -920,10 +942,10 @@ export default function App() {
           align-items: center;
           justify-content: space-between;
           gap: 10px;
-          margin-bottom: 14px;
+          margin-bottom: 10px;
         }
         .calendar-title-wrap { display: flex; flex-direction: column; gap: 4px; }
-        .calendar-month { font-size: 16px; font-weight: 700; color: #f8fafc; }
+        .calendar-month { font-size: 15px; font-weight: 700; color: #f8fafc; }
         .calendar-sub { font-size: 12px; color: #94a3b8; }
         .calendar-nav { display: flex; gap: 8px; }
         .icon-btn {
@@ -939,22 +961,22 @@ export default function App() {
         .calendar-grid {
           display: grid;
           grid-template-columns: repeat(7, minmax(0, 1fr));
-          gap: 8px;
+          gap: 6px;
         }
         .calendar-weekday {
           text-align: center;
-          font-size: 11px;
+          font-size: 10px;
           color: #64748b;
-          padding-bottom: 4px;
+          padding-bottom: 2px;
         }
-        .calendar-empty { min-height: 74px; }
+        .calendar-empty { min-height: 62px; }
         .calendar-cell {
-          min-height: 82px;
-          border-radius: 16px;
+          min-height: 62px;
+          border-radius: 14px;
           border: 1px solid rgba(255,255,255,0.06);
           background: rgba(2,6,23,0.36);
           color: #e2e8f0;
-          padding: 8px 6px;
+          padding: 6px 5px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
@@ -964,11 +986,20 @@ export default function App() {
         .calendar-profit { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.24); }
         .calendar-loss { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.24); }
         .calendar-selected { box-shadow: 0 0 0 2px rgba(34,211,238,0.45) inset; }
-        .calendar-day { font-size: 12px; color: #cbd5e1; }
-        .calendar-pnl {
+        .calendar-day { font-size: 11px; color: #cbd5e1; }
+        .calendar-amount {
           font-size: 10px;
-          line-height: 1.1;
+          line-height: 1.05;
           font-weight: 700;
+          text-align: right;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .calendar-pnl {
+          font-size: 9px;
+          line-height: 1.05;
+          color: #cbd5e1;
           text-align: right;
           white-space: nowrap;
         }
@@ -982,14 +1013,14 @@ export default function App() {
           align-items: center;
           justify-content: space-between;
           gap: 10px;
-          padding: 12px 14px;
-          border-radius: 16px;
+          padding: 10px 12px;
+          border-radius: 14px;
           background: rgba(255,255,255,0.04);
           border: 1px solid rgba(255,255,255,0.06);
         }
         .daily-left { min-width: 0; }
-        .daily-market { font-size: 14px; font-weight: 700; color: #f8fafc; }
-        .daily-meta { margin-top: 4px; font-size: 12px; color: #94a3b8; }
+        .daily-market { font-size: 13px; font-weight: 700; color: #f8fafc; }
+        .daily-meta { margin-top: 3px; font-size: 11px; color: #94a3b8; }
         .daily-pnl { font-size: 14px; font-weight: 700; }
         .positive { color: #4ade80; }
         .negative { color: #f87171; }
@@ -1010,7 +1041,7 @@ export default function App() {
             top: 96px;
             align-self: start;
           }
-          .main-grid { grid-template-columns: minmax(0, 1fr) 420px; }
+          .main-grid { grid-template-columns: minmax(0, 1fr) 360px; }
         }
 
         @media (min-width: 1320px) {
@@ -1108,7 +1139,7 @@ export default function App() {
                         <Field label="방향"><Select value={form.side} onChange={(e) => updateForm("side", e.target.value)}><option value="Long">Long</option><option value="Short">Short</option></Select></Field>
                         <Field label="타임프레임"><Select value={form.timeframe} onChange={(e) => updateForm("timeframe", e.target.value)}><option value="5M">5M</option><option value="15M">15M</option><option value="1H">1H</option><option value="4H">4H</option><option value="1D">1D</option></Select></Field>
                         <Field label="전략"><Select value={form.strategy} onChange={(e) => updateForm("strategy", e.target.value)}><option value="반등매매">반등매매</option><option value="돌파매매">돌파매매</option><option value="추세추종">추세추종</option><option value="눌림목">눌림목</option><option value="스캘프">스캘프</option><option value="기타">기타</option></Select></Field>
-                        <Field label="날짜"><Input type="text" value={form.date} onChange={(e) => updateForm("date", e.target.value)} placeholder="YYYY-MM-DD" /></Field>
+                        <Field label="날짜"><Input type="date" value={form.date} onChange={(e) => updateForm("date", e.target.value)} /></Field>
                         <Field label="상태"><Select value={form.status} onChange={(e) => updateForm("status", e.target.value)}><option value="대기">대기</option><option value="진행중">진행중</option><option value="종료">종료</option></Select></Field>
                       </div>
                     </Section>
@@ -1120,6 +1151,8 @@ export default function App() {
                         <Field label="목표가"><Input value={form.targetPrice} onChange={(e) => updateForm("targetPrice", e.target.value)} /></Field>
                         <Field label="청산가"><Input value={form.exitPrice} onChange={(e) => updateForm("exitPrice", e.target.value)} /></Field>
                         <Field label="레버리지"><Input value={form.leverage} onChange={(e) => updateForm("leverage", e.target.value)} placeholder="예: 5x" /></Field>
+                        <Field label="진입 금액"><Input value={form.entryAmount} onChange={(e) => updateForm("entryAmount", e.target.value)} placeholder="예: 500" /></Field>
+                        <Field label="실현 손익금"><Input value={form.realizedPnlAmount} onChange={(e) => updateForm("realizedPnlAmount", e.target.value)} placeholder="예: 84" /></Field>
                         <Field label="태그"><Input value={form.tags} onChange={(e) => updateForm("tags", e.target.value)} placeholder="예: FVG, sweep" /></Field>
                       </div>
                       <div className="metrics-grid">
@@ -1176,8 +1209,9 @@ export default function App() {
                               <div className="daily-market">{entry.market}</div>
                               <div className="daily-meta">{entry.side} · {entry.setup} · {entry.status}</div>
                             </div>
-                            <div className={`daily-pnl ${Number(entry.pnl) >= 0 ? "positive" : "negative"}`}>
-                              {entry.pnl ? `${Number(entry.pnl) > 0 ? "+" : ""}${entry.pnl}%` : "미청산"}
+                            <div className={`daily-pnl ${Number(entry.realizedPnlAmount || entry.pnl) >= 0 ? "positive" : "negative"}`}>
+                              <div>{entry.realizedPnlAmount ? `${Number(entry.realizedPnlAmount) > 0 ? "+" : ""}${entry.realizedPnlAmount}` : "-"}</div>
+                              <div style={{ fontSize: 11, opacity: 0.9 }}>{entry.pnl ? `${Number(entry.pnl) > 0 ? "+" : ""}${entry.pnl}%` : "미청산"}</div>
                             </div>
                           </div>
                         ))
