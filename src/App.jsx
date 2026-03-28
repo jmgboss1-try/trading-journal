@@ -173,8 +173,10 @@ function formatCalendarPnL(value) {
 function formatMoney(value) {
   const num = Number(value);
   if (!Number.isFinite(num) || num === 0) return "";
-  return `${num > 0 ? "+" : ""}${num.toLocaleString()}`;
-}${num.toFixed(1)}%`;
+function formatPercent(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num === 0) return "";
+  return `${num > 0 ? "+" : ""}${num.toFixed(1)}%`;
 }
 
 function fileToDataUrl(file) {
