@@ -211,6 +211,40 @@ function computeStats(entries) {
   };
 }
 
+function formatDateKey(date) {
+  return String(date || "").trim();
+}
+
+function buildMonthlyCalendarData(entries, year, monthIndex) {
+  const firstDay = new Date(year, monthIndex, 1).getDay();
+  const lastDate = new Date(year, monthIndex + 1, 0).getDate();
+  const byDate = {};
+
+  entries.forEach((entry) => {
+    if (entry.status !== "종료") return;
+    const key = formatDateKey(entry.date);
+    const pnl = Number(entry.pnl);
+    if (!key || !Number.isFinite(pnl)) return;
+    byDate[key] = (byDate[key] || 0) + pnl;
+  });
+
+  const cells = [];
+  for (let i = 0; i < firstDay; i += 1) cells.push(null);
+
+  for (let day = 1; day <= lastDate; day += 1) {
+    const key = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    cells.push({ day, key, value: byDate[key] || 0 });
+  }
+
+  return cells;
+}
+
+function formatCalendarPnL(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num === 0) return "";
+  return `${num > 0 ? "+" : ""}${num.toFixed(1)}%`;
+}
+
 function queryStringNormalize(value) {
   return String(value || "").toLowerCase().trim();
 }
@@ -292,6 +326,33 @@ function ListItem({ entry, selected, onClick }) {
   );
 }
 
+function CalendarGrid({ cells, selectedDate, onSelectDate }) {
+  const weekDays = ["S", "M", "T", "W", "T", "F", "S"];
+
+  return (
+    <div>
+      <div className="calendar-weekdays">
+        {weekDays.map((day) => (
+          <div key={day} className="calendar-weekday">{day}</div>
+        ))}
+      </div>
+      <div className="calendar-grid">
+        {cells.map((cell, index) => {
+          if (!cell) return <div key={`blank-${index}`} className="calendar-empty" />;
+          const tone = cell.value > 0 ? "calendar-profit" : cell.value < 0 ? "calendar-loss" : "";
+          const selected = selectedDate === cell.key ? "calendar-selected" : "";
+          return (
+            <button key={cell.key} type="button" onClick={() => onSelectDate(cell.key)} className={`calendar-cell ${tone} ${selected}`}>
+              <div className="calendar-day">{cell.day}</div>
+              <div className="calendar-pnl">{formatCalendarPnL(cell.value)}</div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [entries, setEntries] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -309,10 +370,15 @@ export default function App() {
   const unsubscribeRef = useRef(null);
   const authUnsubscribeRef = useRef(null);
 
-  const activeSymbol = useMemo(() => normalizeSymbol(form.market, form.category), [form.market, form.category]);
-  const tvEmbedUrl = useMemo(() => buildTradingViewEmbedUrl(activeSymbol, form.timeframe), [activeSymbol, form.timeframe]);
-  const tvOpenUrl = useMemo(() => form.tvLink || buildTradingViewOpenUrl(activeSymbol), [form.tvLink, activeSymbol]);
   const stats = useMemo(() => computeStats(entries), [entries]);
+  const today = new Date();
+  const [calendarYear, setCalendarYear] = useState(today.getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(today.getMonth());
+  const [selectedDate, setSelectedDate] = useState(getToday());
+  const calendarCells = useMemo(() => buildMonthlyCalendarData(entries, calendarYear, calendarMonth), [entries, calendarYear, calendarMonth]);
+  const selectedDateEntries = useMemo(() => {
+    return entries.filter((entry) => entry.date === selectedDate).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  }, [entries, selectedDate]);
 
   const filteredEntries = useMemo(() => {
     const q = queryStringNormalize(queryText);
@@ -530,319 +596,120 @@ export default function App() {
           background: radial-gradient(circle at top, rgba(34,211,238,0.12), transparent 26%), linear-gradient(180deg, #020617 0%, #0b1120 44%, #111827 100%);
         }
         a { color: inherit; }
-        .app-shell {
-          min-height: 100vh;
-        }
-        .topbar {
-          position: sticky;
-          top: 0;
-          z-index: 30;
-          border-bottom: 1px solid rgba(255,255,255,0.06);
-          background: rgba(2,6,23,0.8);
-          backdrop-filter: blur(18px);
-        }
-        .topbar-inner, .page {
-          max-width: 1280px;
-          margin: 0 auto;
-        }
-        .topbar-inner {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          padding: 16px;
-        }
-        .brand-title {
-          margin: 0;
-          font-size: 34px;
-          line-height: 1.05;
-          font-weight: 700;
-          letter-spacing: -0.04em;
-          color: #e0f2fe;
-        }
-        .brand-sub {
-          margin-top: 8px;
-          font-size: 14px;
-          color: #94a3b8;
-        }
-        .topbar-actions {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-        .page {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 20px;
-          padding: 20px 16px 36px;
-        }
-        .card {
-          border: 1px solid rgba(255,255,255,0.07);
-          background: rgba(255,255,255,0.04);
-          border-radius: 28px;
-          box-shadow: 0 18px 60px rgba(0,0,0,0.32);
-          backdrop-filter: blur(18px);
-        }
-        .sidebar {
-          display: grid;
-          gap: 16px;
-        }
-        .sidebar, .content {
-          min-width: 0;
-        }
-        .card-pad {
-          padding: 18px;
-        }
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
-        }
-        .stat-card {
-          border-radius: 20px;
-          border: 1px solid rgba(255,255,255,0.06);
-          background: rgba(0,0,0,0.18);
-          padding: 16px;
-        }
-        .stat-title {
-          font-size: 11px;
-          color: #64748b;
-          text-transform: uppercase;
-          letter-spacing: 0.18em;
-        }
-        .stat-value {
-          margin-top: 8px;
-          font-size: 24px;
-          font-weight: 700;
-          color: #f8fafc;
-        }
-        .btn {
-          appearance: none;
-          border: 0;
-          border-radius: 18px;
-          cursor: pointer;
-          padding: 11px 16px;
-          font-size: 14px;
-          font-weight: 600;
-          transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
-        }
+        .app-shell { min-height: 100vh; }
+        .topbar { position: sticky; top: 0; z-index: 30; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(2,6,23,0.8); backdrop-filter: blur(18px); }
+        .topbar-inner, .page { max-width: 1280px; margin: 0 auto; }
+        .topbar-inner { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+        .brand-title { margin: 0; font-size: 34px; line-height: 1.05; font-weight: 700; letter-spacing: -0.04em; color: #e0f2fe; }
+        .brand-sub { margin-top: 8px; font-size: 14px; color: #94a3b8; }
+        .topbar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .page { display: grid; grid-template-columns: 1fr; gap: 20px; padding: 20px 16px 36px; }
+        .card { border: 1px solid rgba(255,255,255,0.07); background: rgba(255,255,255,0.04); border-radius: 28px; box-shadow: 0 18px 60px rgba(0,0,0,0.32); backdrop-filter: blur(18px); }
+        .sidebar { display: grid; gap: 16px; }
+        .sidebar, .content { min-width: 0; }
+        .card-pad { padding: 18px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .stat-card { border-radius: 20px; border: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.18); padding: 16px; }
+        .stat-title { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.18em; }
+        .stat-value { margin-top: 8px; font-size: 24px; font-weight: 700; color: #f8fafc; }
+        .btn { appearance: none; border: 0; border-radius: 18px; cursor: pointer; padding: 11px 16px; font-size: 14px; font-weight: 600; transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease; }
         .btn:hover { transform: translateY(-1px); }
         .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
-        .btn-primary {
-          background: #22d3ee;
-          color: #04111f;
-          box-shadow: 0 10px 30px rgba(34, 211, 238, 0.2);
-        }
-        .btn-outline {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.1);
-          color: #e2e8f0;
-        }
-        .list-title, .section-title {
-          font-size: 18px;
-          font-weight: 700;
-          color: #f8fafc;
-          margin-bottom: 14px;
-        }
-        .list-controls {
-          display: grid;
-          gap: 12px;
-        }
-        .chips {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-        .chip {
-          border: 1px solid rgba(255,255,255,0.08);
-          background: rgba(255,255,255,0.04);
-          color: #cbd5e1;
-          padding: 8px 12px;
-          border-radius: 999px;
-          font-size: 12px;
-          cursor: pointer;
-        }
-        .chip-active {
-          background: #22d3ee;
-          color: #04111f;
-          border-color: transparent;
-        }
-        .list-scroll {
-          display: grid;
-          gap: 10px;
-          max-height: 52vh;
-          overflow: auto;
-          padding-right: 4px;
-        }
-        .list-item {
-          width: 100%;
-          text-align: left;
-          border-radius: 20px;
-          border: 1px solid rgba(255,255,255,0.06);
-          background: rgba(0,0,0,0.14);
-          color: inherit;
-          padding: 14px;
-          cursor: pointer;
-          transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
-        }
+        .btn-primary { background: #22d3ee; color: #04111f; box-shadow: 0 10px 30px rgba(34, 211, 238, 0.2); }
+        .btn-outline { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0; }
+        .list-title, .section-title { font-size: 18px; font-weight: 700; color: #f8fafc; margin-bottom: 14px; }
+        .list-controls { display: grid; gap: 12px; }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .chip { border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: #cbd5e1; padding: 8px 12px; border-radius: 999px; font-size: 12px; cursor: pointer; }
+        .chip-active { background: #22d3ee; color: #04111f; border-color: transparent; }
+        .list-scroll { display: grid; gap: 10px; max-height: 52vh; overflow: auto; padding-right: 4px; }
+        .list-item { width: 100%; text-align: left; border-radius: 20px; border: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.14); color: inherit; padding: 14px; cursor: pointer; transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease; }
         .list-item:hover { transform: translateY(-1px); background: rgba(255,255,255,0.05); }
-        .list-item-selected {
-          border-color: rgba(34, 211, 238, 0.5);
-          background: rgba(34, 211, 238, 0.1);
-          box-shadow: 0 12px 32px rgba(8, 47, 73, 0.35);
-        }
-        .list-item-top {
-          display: flex;
-          justify-content: space-between;
-          gap: 8px;
-        }
+        .list-item-selected { border-color: rgba(34, 211, 238, 0.5); background: rgba(34, 211, 238, 0.1); box-shadow: 0 12px 32px rgba(8, 47, 73, 0.35); }
+        .list-item-top { display: flex; justify-content: space-between; gap: 8px; }
         .list-item-market { font-size: 16px; font-weight: 700; color: #f8fafc; }
         .list-item-date { font-size: 12px; color: #64748b; }
-        .list-item-badges {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-          margin-top: 10px;
-        }
-        .badge {
-          border-radius: 999px;
-          padding: 5px 9px;
-          font-size: 11px;
-          color: #94a3b8;
-          background: rgba(255,255,255,0.05);
-        }
-        .list-item-pnl {
-          margin-top: 10px;
-          font-size: 14px;
-          color: #cbd5e1;
-        }
-        .empty-box {
-          border: 1px dashed rgba(255,255,255,0.14);
-          border-radius: 18px;
-          padding: 16px;
-          color: #94a3b8;
-          font-size: 14px;
-          text-align: center;
-        }
-        .muted-box {
-          border-radius: 18px;
-          background: rgba(245, 158, 11, 0.12);
-          color: #fcd34d;
-          padding: 12px 14px;
-          font-size: 14px;
-        }
-        .content-card {
-          padding: 20px;
-        }
-        .content-head {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          margin-bottom: 20px;
-        }
-        .content-title {
-          font-size: 30px;
-          line-height: 1.05;
-          letter-spacing: -0.04em;
-          font-weight: 700;
-          color: #f8fafc;
-        }
-        .content-sub {
-          margin-top: 8px;
-          color: #94a3b8;
-          font-size: 14px;
-        }
-        .content-actions {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-        .main-grid {
-          display: grid;
-          gap: 18px;
-          grid-template-columns: 1fr;
-        }
-        .left-stack, .right-stack {
-          display: grid;
-          gap: 18px;
-          min-width: 0;
-        }
-        .two-col {
-          display: grid;
-          gap: 18px;
-          grid-template-columns: 1fr;
-        }
-        .section-card {
-          border-radius: 24px;
-          border: 1px solid rgba(255,255,255,0.06);
-          background: rgba(0,0,0,0.16);
-          padding: 18px;
-        }
-        .section-title {
-          margin: 0 0 14px;
-        }
-        .form-grid {
-          display: grid;
-          gap: 12px;
-          grid-template-columns: 1fr;
-        }
+        .list-item-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+        .badge { border-radius: 999px; padding: 5px 9px; font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.05); }
+        .list-item-pnl { margin-top: 10px; font-size: 14px; color: #cbd5e1; }
+        .empty-box { border: 1px dashed rgba(255,255,255,0.14); border-radius: 18px; padding: 16px; color: #94a3b8; font-size: 14px; text-align: center; }
+        .muted-box { border-radius: 18px; background: rgba(245, 158, 11, 0.12); color: #fcd34d; padding: 12px 14px; font-size: 14px; }
+        .content-card { padding: 20px; }
+        .content-head { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+        .content-title { font-size: 30px; line-height: 1.05; letter-spacing: -0.04em; font-weight: 700; color: #f8fafc; }
+        .content-sub { margin-top: 8px; color: #94a3b8; font-size: 14px; }
+        .content-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .main-grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
+        .left-stack, .right-stack { display: grid; gap: 18px; min-width: 0; }
+        .two-col { display: grid; gap: 18px; grid-template-columns: 1fr; }
+        .section-card { border-radius: 24px; border: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.16); padding: 18px; }
+        .section-title { margin: 0 0 14px; }
+        .form-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
         .field { display: block; }
-        .field-label {
-          display: block;
-          margin-bottom: 6px;
-          font-size: 13px;
-          font-weight: 600;
-          color: #cbd5e1;
-        }
-        .control {
-          width: 100%;
-          border-radius: 18px;
-          border: 1px solid rgba(255,255,255,0.12);
-          background: rgba(2, 6, 23, 0.55);
-          color: #f8fafc;
-          padding: 12px 14px;
-          font-size: 14px;
-          outline: none;
-          transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-        }
-        .control:focus {
-          border-color: rgba(34, 211, 238, 0.8);
-          box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18);
-          background: rgba(2, 6, 23, 0.72);
-        }
+        .field-label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #cbd5e1; }
+        .control { width: 100%; border-radius: 18px; border: 1px solid rgba(255,255,255,0.12); background: rgba(2, 6, 23, 0.55); color: #f8fafc; padding: 12px 14px; font-size: 14px; outline: none; transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
+        .control:focus { border-color: rgba(34, 211, 238, 0.8); box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18); background: rgba(2, 6, 23, 0.72); }
         .control::placeholder { color: #64748b; }
         .textarea { min-height: 140px; resize: vertical; }
-        .metrics-grid {
-          display: grid;
-          gap: 12px;
-          grid-template-columns: 1fr;
-          margin-top: 12px;
-        }
-        .metric-card {
-          border-radius: 20px;
-          padding: 14px 16px;
-          border: 1px solid rgba(255,255,255,0.08);
-          background: rgba(255,255,255,0.04);
-        }
+        .metrics-grid { display: grid; gap: 12px; grid-template-columns: 1fr; margin-top: 12px; }
+        .metric-card { border-radius: 20px; padding: 14px 16px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); }
         .metric-cyan { background: rgba(34,211,238,0.08); border-color: rgba(34,211,238,0.16); }
         .metric-rose { background: rgba(244,63,94,0.08); border-color: rgba(244,63,94,0.16); }
         .metric-violet { background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.16); }
         .metric-label { font-size: 12px; color: #94a3b8; }
         .metric-value { margin-top: 6px; font-size: 22px; font-weight: 700; color: #f8fafc; }
-        .iframe-wrap {
-          overflow: hidden;
-          border-radius: 18px;
-          border: 1px solid rgba(255,255,255,0.08);
-          background: rgba(2,6,23,0.4);
+        .upload-box { min-height: 168px; border-radius: 20px; border: 1px dashed rgba(255,255,255,0.16); background: rgba(2,6,23,0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; cursor: pointer; padding: 16px; color: #cbd5e1; }
+        .upload-emoji { font-size: 30px; margin-bottom: 8px; }
+        .upload-sub { margin-top: 4px; font-size: 12px; color: #94a3b8; }
+        .screenshot { width: 100%; max-height: 260px; object-fit: contain; border-radius: 18px; display: block; margin-top: 12px; }
+        .file-error { margin-top: 10px; color: #fda4af; font-size: 13px; }
+        .config-card { padding: 18px; margin: 18px auto 0; max-width: 1280px; }
+        .config-title { font-size: 20px; font-weight: 700; color: #ddd6fe; margin-bottom: 14px; }
+        .config-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+        .config-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+        .calendar-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+        .calendar-title-wrap { display: flex; flex-direction: column; gap: 4px; }
+        .calendar-month { font-size: 16px; font-weight: 700; color: #f8fafc; }
+        .calendar-sub { font-size: 12px; color: #94a3b8; }
+        .calendar-nav { display: flex; gap: 8px; }
+        .icon-btn { width: 36px; height: 36px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: #e2e8f0; cursor: pointer; }
+        .calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+        .calendar-weekday { text-align: center; font-size: 11px; color: #64748b; padding-bottom: 4px; }
+        .calendar-empty { min-height: 74px; }
+        .calendar-cell { min-height: 74px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); background: rgba(2,6,23,0.36); color: #e2e8f0; padding: 8px; display: flex; flex-direction: column; justify-content: space-between; text-align: left; cursor: pointer; }
+        .calendar-profit { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.24); }
+        .calendar-loss { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.24); }
+        .calendar-selected { box-shadow: 0 0 0 2px rgba(34,211,238,0.45) inset; }
+        .calendar-day { font-size: 12px; color: #cbd5e1; }
+        .calendar-pnl { font-size: 12px; font-weight: 700; }
+        .daily-list { display: grid; gap: 10px; margin-top: 14px; }
+        .daily-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); }
+        .daily-left { min-width: 0; }
+        .daily-market { font-size: 14px; font-weight: 700; color: #f8fafc; }
+        .daily-meta { margin-top: 4px; font-size: 12px; color: #94a3b8; }
+        .daily-pnl { font-size: 14px; font-weight: 700; }
+        .positive { color: #4ade80; }
+        .negative { color: #f87171; }
+
+        @media (min-width: 720px) {
+          .topbar-inner { flex-direction: row; align-items: center; justify-content: space-between; }
+          .content-head { flex-direction: row; align-items: center; justify-content: space-between; }
+          .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .config-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
-        .tv-frame { width: 100%; height: 260px; border: 0; }
-        .tv-link {
-          display: inline-block;
-          margin-top: 4px;
-          color: #67e8f9;
-          text-decoration: underline;
-          text-underline-offset: 4px;
-          font-size: 14px;
+
+        @media (min-width: 1100px) {
+          .page { grid-template-columns: 320px minmax(0, 1fr); }
+          .sidebar { position: sticky; top: 96px; align-self: start; }
+          .main-grid { grid-template-columns: minmax(0, 1fr) 360px; }
         }
+
+        @media (min-width: 1320px) {
+          .config-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+      `}</style>
         .upload-box {
           min-height: 168px;
           border-radius: 20px;
@@ -970,7 +837,7 @@ export default function App() {
               <div className="content-head">
                 <div>
                   <div className="content-title">기록 상세 / 입력</div>
-                  <div className="content-sub">노션 + 트레이딩뷰 느낌의 개인용 저널. 빠르게 기록하고, 나중에 B버전으로 확장 가능한 구조.</div>
+                  <div className="content-sub">노션 느낌의 개인용 저널. 빠르게 기록하고, 날짜별 손익 흐름을 한눈에 보는 구조.</div>
                 </div>
                 <div className="content-actions">
                   <Button variant="outline" onClick={() => deleteEntry(form.id)} disabled={!form.id}>삭제</Button>
@@ -1025,13 +892,48 @@ export default function App() {
                 </div>
 
                 <div className="right-stack">
-                  <Section title="TradingView">
-                    <div className="iframe-wrap">
-                      <iframe title="TradingView" src={tvEmbedUrl} className="tv-frame" />
+                  <Section title="월별 대시보드">
+                    <div className="calendar-head">
+                      <div className="calendar-title-wrap">
+                        <div className="calendar-month">{`${calendarYear}.${String(calendarMonth + 1).padStart(2, "0")}`}</div>
+                        <div className="calendar-sub">날짜별 종료 매매 손익률 합계</div>
+                      </div>
+                      <div className="calendar-nav">
+                        <button type="button" className="icon-btn" onClick={() => {
+                          if (calendarMonth === 0) {
+                            setCalendarMonth(11);
+                            setCalendarYear((prev) => prev - 1);
+                          } else {
+                            setCalendarMonth((prev) => prev - 1);
+                          }
+                        }}>‹</button>
+                        <button type="button" className="icon-btn" onClick={() => {
+                          if (calendarMonth === 11) {
+                            setCalendarMonth(0);
+                            setCalendarYear((prev) => prev + 1);
+                          } else {
+                            setCalendarMonth((prev) => prev + 1);
+                          }
+                        }}>›</button>
+                      </div>
                     </div>
-                    <div style={{ marginTop: 12 }}>
-                      <Field label="TradingView 링크"><Input value={form.tvLink} onChange={(e) => updateForm("tvLink", e.target.value)} placeholder="붙여넣으면 우선 사용" /></Field>
-                      <a href={tvOpenUrl} target="_blank" rel="noreferrer" className="tv-link">새 탭에서 TradingView 열기</a>
+
+                    <CalendarGrid cells={calendarCells} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+
+                    <div className="daily-list">
+                      {selectedDateEntries.length === 0 ? (
+                        <div className="empty-box">선택한 날짜의 기록이 없습니다.</div>
+                      ) : (
+                        selectedDateEntries.map((entry) => (
+                          <div key={entry.id} className="daily-row">
+                            <div className="daily-left">
+                              <div className="daily-market">{entry.market}</div>
+                              <div className="daily-meta">{entry.side} · {entry.setup} · {entry.status}</div>
+                            </div>
+                            <div className={`daily-pnl ${Number(entry.pnl) >= 0 ? "positive" : "negative"}`}>{entry.pnl ? `${Number(entry.pnl) > 0 ? "+" : ""}${entry.pnl}%` : "미청산"}</div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </Section>
 
