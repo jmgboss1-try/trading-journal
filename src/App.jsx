@@ -164,7 +164,7 @@ function formatSigned(value, digits = 2, suffix = "%") {
   return `${n > 0 ? "+" : ""}${n.toFixed(digits)}${suffix}`;
 }
 
-function formatCalendarPnL(value) {
+function formatCalendarPercent(value) {
   const num = Number(value);
   if (!Number.isFinite(num) || num === 0) return "";
   return `${num > 0 ? "+" : ""}${num.toFixed(1)}%`;
@@ -173,10 +173,7 @@ function formatCalendarPnL(value) {
 function formatMoney(value) {
   const num = Number(value);
   if (!Number.isFinite(num) || num === 0) return "";
-function formatPercent(value) {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num === 0) return "";
-  return `${num > 0 ? "+" : ""}${num.toFixed(1)}%`;
+  return `${num > 0 ? "+" : ""}${num.toLocaleString()}`;
 }
 
 function fileToDataUrl(file) {
@@ -207,7 +204,6 @@ function computeStats(entries) {
     total,
     winRate: total ? (wins.length / total) * 100 : 0,
     avg: total ? net / total : 0,
-    net,
     avgRR: rrItems.length ? rrItems.reduce((sum, e) => sum + Number(e.riskReward), 0) / rrItems.length : 0,
   };
 }
@@ -316,7 +312,10 @@ function ListItem({ entry, selected, onClick }) {
         <span className="badge">{entry.side}</span>
         <span className="badge">{entry.status}</span>
       </div>
-      <div className="list-item-pnl">{entry.pnl ? `${entry.pnl}%` : "미청산"}</div>
+      <div className="list-item-pnl">
+        {entry.realizedPnlAmount ? `${formatMoney(entry.realizedPnlAmount)} / ` : ""}
+        {entry.pnl ? `${entry.pnl}%` : "미청산"}
+      </div>
     </button>
   );
 }
@@ -340,7 +339,7 @@ function CalendarGrid({ cells, selectedDate, onSelectDate }) {
             <button key={cell.key} type="button" onClick={() => onSelectDate(cell.key)} className={`calendar-cell ${tone} ${selected}`}>
               <div className="calendar-day">{cell.day}</div>
               <div className="calendar-amount">{formatMoney(cell.amount)}</div>
-              <div className="calendar-pnl">{formatCalendarPnL(cell.percent)}</div>
+              <div className="calendar-pnl">{formatCalendarPercent(cell.percent)}</div>
             </button>
           );
         })}
@@ -381,7 +380,7 @@ export default function App() {
   const filteredEntries = useMemo(() => {
     const q = queryStringNormalize(queryText);
     return entries.filter((entry) => {
-      const haystack = queryStringNormalize([entry.market, entry.category, entry.setup, entry.tags, entry.thesis, entry.note].join(" "));
+      const haystack = queryStringNormalize([entry.market, entry.category, entry.strategy, entry.tags, entry.thesis, entry.review].join(" "));
       const queryMatch = !q || haystack.includes(q);
       const categoryMatch = categoryFilter === "전체" || entry.category === categoryFilter;
       return queryMatch && categoryMatch;
@@ -420,6 +419,7 @@ export default function App() {
       setSyncMessage("브라우저 저장 모드");
       return undefined;
     }
+
     try {
       const { auth } = getFirebaseServices(firebaseConfig);
       authUnsubscribeRef.current = onAuthStateChanged(auth, (nextUser) => {
@@ -431,6 +431,7 @@ export default function App() {
       setAuthReady(true);
       setSyncMessage("Firebase 초기화 실패 · 로컬 저장 모드");
     }
+
     return () => {
       if (authUnsubscribeRef.current) authUnsubscribeRef.current();
     };
@@ -442,6 +443,7 @@ export default function App() {
       unsubscribeRef.current = null;
     }
     if (!user || !isFirebaseConfigReady(firebaseConfig)) return undefined;
+
     try {
       const { db } = getFirebaseServices(firebaseConfig);
       const q = query(collection(db, "users", user.uid, "entries"), orderBy("updatedAt", "desc"));
@@ -459,6 +461,7 @@ export default function App() {
     } catch {
       setSyncMessage("실시간 동기화 실패 · 로컬 저장 모드");
     }
+
     return () => {
       if (unsubscribeRef.current) unsubscribeRef.current();
     };
@@ -502,7 +505,8 @@ export default function App() {
   }
 
   function newEntry() {
-    setForm(createDefaultEntry());
+    const fresh = createDefaultEntry();
+    setForm(fresh);
     setSelectedId(null);
     setFileError("");
   }
@@ -512,6 +516,7 @@ export default function App() {
     if (!found) return;
     setForm(found);
     setSelectedId(id);
+    setSelectedDate(found.date || getToday());
     setFileError("");
   }
 
@@ -653,8 +658,8 @@ export default function App() {
         .page {
           display: grid;
           grid-template-columns: 1fr;
-          gap: 20px;
-          padding: 20px 16px 36px;
+          gap: 18px;
+          padding: 18px 16px 32px;
         }
         .card {
           border: 1px solid rgba(255,255,255,0.07);
@@ -663,10 +668,7 @@ export default function App() {
           box-shadow: 0 18px 60px rgba(0,0,0,0.32);
           backdrop-filter: blur(18px);
         }
-        .sidebar {
-          display: grid;
-          gap: 16px;
-        }
+        .sidebar { display: grid; gap: 16px; }
         .sidebar, .content { min-width: 0; }
         .card-pad { padding: 16px; }
         .stats-grid {
@@ -704,31 +706,16 @@ export default function App() {
         }
         .btn:hover { transform: translateY(-1px); }
         .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
-        .btn-primary {
-          background: #22d3ee;
-          color: #04111f;
-          box-shadow: 0 10px 30px rgba(34, 211, 238, 0.2);
-        }
-        .btn-outline {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.1);
-          color: #e2e8f0;
-        }
+        .btn-primary { background: #22d3ee; color: #04111f; box-shadow: 0 10px 30px rgba(34, 211, 238, 0.2); }
+        .btn-outline { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0; }
         .list-title, .section-title {
           font-size: 16px;
           font-weight: 700;
           color: #f8fafc;
           margin-bottom: 12px;
         }
-        .list-controls {
-          display: grid;
-          gap: 12px;
-        }
-        .chips {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
+        .list-controls { display: grid; gap: 12px; }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; }
         .chip {
           border: 1px solid rgba(255,255,255,0.08);
           background: rgba(255,255,255,0.04);
@@ -738,11 +725,7 @@ export default function App() {
           font-size: 12px;
           cursor: pointer;
         }
-        .chip-active {
-          background: #22d3ee;
-          color: #04111f;
-          border-color: transparent;
-        }
+        .chip-active { background: #22d3ee; color: #04111f; border-color: transparent; }
         .list-scroll {
           display: grid;
           gap: 10px;
@@ -762,23 +745,13 @@ export default function App() {
           transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
         }
         .list-item:hover { transform: translateY(-1px); background: rgba(255,255,255,0.05); }
-        .list-item-selected {
-          border-color: rgba(34, 211, 238, 0.5);
-          background: rgba(34, 211, 238, 0.1);
-          box-shadow: 0 12px 32px rgba(8, 47, 73, 0.35);
-        }
+        .list-item-selected { border-color: rgba(34, 211, 238, 0.5); background: rgba(34, 211, 238, 0.1); box-shadow: 0 12px 32px rgba(8, 47, 73, 0.35); }
         .list-item-top { display: flex; justify-content: space-between; gap: 8px; }
         .list-item-market { font-size: 16px; font-weight: 700; color: #f8fafc; }
         .list-item-date { font-size: 12px; color: #64748b; }
         .list-item-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-        .badge {
-          border-radius: 999px;
-          padding: 5px 9px;
-          font-size: 11px;
-          color: #94a3b8;
-          background: rgba(255,255,255,0.05);
-        }
-        .list-item-pnl { margin-top: 10px; font-size: 14px; color: #cbd5e1; }
+        .badge { border-radius: 999px; padding: 5px 9px; font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.05); }
+        .list-item-pnl { margin-top: 10px; font-size: 13px; color: #cbd5e1; }
         .empty-box {
           border: 1px dashed rgba(255,255,255,0.14);
           border-radius: 18px;
@@ -787,72 +760,24 @@ export default function App() {
           font-size: 14px;
           text-align: center;
         }
-        .muted-box {
-          border-radius: 18px;
-          background: rgba(245, 158, 11, 0.12);
-          color: #fcd34d;
-          padding: 12px 14px;
-          font-size: 14px;
-        }
+        .muted-box { border-radius: 18px; background: rgba(245, 158, 11, 0.12); color: #fcd34d; padding: 12px 14px; font-size: 14px; }
         .content-card { padding: 16px; }
-        .content-head {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          margin-bottom: 20px;
-        }
-        .content-title {
-          font-size: 30px;
-          line-height: 1.05;
-          letter-spacing: -0.04em;
-          font-weight: 700;
-          color: #f8fafc;
-        }
-        .content-sub {
-          margin-top: 8px;
-          color: #94a3b8;
-          font-size: 14px;
-        }
-        .content-actions {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-        .main-grid {
-          display: grid;
-          gap: 18px;
-          grid-template-columns: 1fr;
-        }
-        .left-stack, .right-stack {
-          display: grid;
-          gap: 18px;
-          min-width: 0;
-        }
-        .two-col {
-          display: grid;
-          gap: 18px;
-          grid-template-columns: 1fr;
-        }
+        .content-head { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+        .content-title { font-size: 28px; line-height: 1.05; letter-spacing: -0.04em; font-weight: 700; color: #f8fafc; }
+        .content-sub { margin-top: 8px; color: #94a3b8; font-size: 14px; }
+        .content-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .main-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+        .left-stack, .right-stack { display: grid; gap: 16px; min-width: 0; }
+        .two-col { display: grid; gap: 16px; grid-template-columns: 1fr; }
         .section-card {
           border-radius: 22px;
           border: 1px solid rgba(255,255,255,0.06);
           background: rgba(0,0,0,0.16);
           padding: 14px;
         }
-        .section-title { margin: 0 0 14px; }
-        .form-grid {
-          display: grid;
-          gap: 12px;
-          grid-template-columns: 1fr;
-        }
+        .form-grid { display: grid; gap: 10px; grid-template-columns: 1fr; }
         .field { display: block; }
-        .field-label {
-          display: block;
-          margin-bottom: 5px;
-          font-size: 12px;
-          font-weight: 600;
-          color: #cbd5e1;
-        }
+        .field-label { display: block; margin-bottom: 5px; font-size: 12px; font-weight: 600; color: #cbd5e1; }
         .control {
           width: 100%;
           min-width: 0;
@@ -866,27 +791,11 @@ export default function App() {
           outline: none;
           transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
         }
-        .control:focus {
-          border-color: rgba(34, 211, 238, 0.8);
-          box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18);
-          background: rgba(2, 6, 23, 0.72);
-        }
-        .control[type="date"] {
-          cursor: pointer;
-        }
-        .control:focus {
-          border-color: rgba(34, 211, 238, 0.8);
-          box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18);
-          background: rgba(2, 6, 23, 0.72);
-        }
+        .control:focus { border-color: rgba(34, 211, 238, 0.8); box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18); background: rgba(2, 6, 23, 0.72); }
+        .control[type="date"] { cursor: pointer; }
         .control::placeholder { color: #64748b; }
         .textarea { min-height: 112px; resize: vertical; }
-        .metrics-grid {
-          display: grid;
-          gap: 12px;
-          grid-template-columns: 1fr;
-          margin-top: 12px;
-        }
+        .metrics-grid { display: grid; gap: 12px; grid-template-columns: 1fr; margin-top: 12px; }
         .metric-card {
           min-width: 0;
           border-radius: 18px;
@@ -897,22 +806,11 @@ export default function App() {
         .metric-cyan { background: rgba(34,211,238,0.08); border-color: rgba(34,211,238,0.16); }
         .metric-rose { background: rgba(244,63,94,0.08); border-color: rgba(244,63,94,0.16); }
         .metric-violet { background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.16); }
-        .metric-label {
-          font-size: 10px;
-          color: #94a3b8;
-          line-height: 1.15;
-        }
-        .metric-value {
-          margin-top: 6px;
-          font-size: 14px;
-          line-height: 1.1;
-          font-weight: 700;
-          color: #f8fafc;
-          white-space: nowrap;
-        }
+        .metric-label { font-size: 10px; color: #94a3b8; line-height: 1.15; }
+        .metric-value { margin-top: 6px; font-size: 14px; line-height: 1.1; font-weight: 700; color: #f8fafc; white-space: nowrap; }
         .upload-box {
-          min-height: 168px;
-          border-radius: 20px;
+          min-height: 150px;
+          border-radius: 18px;
           border: 1px dashed rgba(255,255,255,0.16);
           background: rgba(2,6,23,0.3);
           display: flex;
@@ -921,56 +819,37 @@ export default function App() {
           justify-content: center;
           text-align: center;
           cursor: pointer;
-          padding: 16px;
+          padding: 14px;
           color: #cbd5e1;
         }
-        .upload-emoji { font-size: 30px; margin-bottom: 8px; }
+        .upload-emoji { font-size: 28px; margin-bottom: 8px; }
         .upload-sub { margin-top: 4px; font-size: 12px; color: #94a3b8; }
-        .screenshot {
-          width: 100%;
-          max-height: 260px;
-          object-fit: contain;
-          border-radius: 18px;
-          display: block;
-          margin-top: 12px;
-        }
+        .screenshot { width: 100%; max-height: 260px; object-fit: contain; border-radius: 18px; display: block; margin-top: 12px; }
         .file-error { margin-top: 10px; color: #fda4af; font-size: 13px; }
         .config-card { padding: 18px; margin: 18px auto 0; max-width: 1280px; }
         .config-title { font-size: 20px; font-weight: 700; color: #ddd6fe; margin-bottom: 14px; }
         .config-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
         .config-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-        .calendar-head {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-          margin-bottom: 10px;
-        }
+        .calendar-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
         .calendar-title-wrap { display: flex; flex-direction: column; gap: 4px; }
         .calendar-month { font-size: 15px; font-weight: 700; color: #f8fafc; }
-        .calendar-sub { font-size: 12px; color: #94a3b8; }
+        .calendar-sub { font-size: 11px; color: #94a3b8; }
         .calendar-nav { display: flex; gap: 8px; }
         .icon-btn {
-          width: 36px;
-          height: 36px;
-          border-radius: 14px;
+          width: 34px;
+          height: 34px;
+          border-radius: 12px;
           border: 1px solid rgba(255,255,255,0.08);
           background: rgba(255,255,255,0.04);
           color: #e2e8f0;
           cursor: pointer;
         }
-        .calendar-weekdays,
-        .calendar-grid {
+        .calendar-weekdays, .calendar-grid {
           display: grid;
           grid-template-columns: repeat(7, minmax(0, 1fr));
           gap: 6px;
         }
-        .calendar-weekday {
-          text-align: center;
-          font-size: 10px;
-          color: #64748b;
-          padding-bottom: 2px;
-        }
+        .calendar-weekday { text-align: center; font-size: 10px; color: #64748b; padding-bottom: 2px; }
         .calendar-empty { min-height: 62px; }
         .calendar-cell {
           min-height: 62px;
@@ -998,18 +877,8 @@ export default function App() {
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        .calendar-pnl {
-          font-size: 9px;
-          line-height: 1.05;
-          color: #cbd5e1;
-          text-align: right;
-          white-space: nowrap;
-        }
-        .daily-list {
-          display: grid;
-          gap: 10px;
-          margin-top: 14px;
-        }
+        .calendar-pnl { font-size: 9px; line-height: 1.05; color: #cbd5e1; text-align: right; white-space: nowrap; }
+        .daily-list { display: grid; gap: 10px; margin-top: 14px; }
         .daily-row {
           display: flex;
           align-items: center;
@@ -1023,7 +892,7 @@ export default function App() {
         .daily-left { min-width: 0; }
         .daily-market { font-size: 13px; font-weight: 700; color: #f8fafc; }
         .daily-meta { margin-top: 3px; font-size: 11px; color: #94a3b8; }
-        .daily-pnl { font-size: 14px; font-weight: 700; }
+        .daily-pnl { font-size: 13px; font-weight: 700; text-align: right; }
         .positive { color: #4ade80; }
         .negative { color: #f87171; }
 
@@ -1038,11 +907,7 @@ export default function App() {
 
         @media (min-width: 1100px) {
           .page { grid-template-columns: 320px minmax(0, 1fr); }
-          .sidebar {
-            position: sticky;
-            top: 96px;
-            align-self: start;
-          }
+          .sidebar { position: sticky; top: 96px; align-self: start; }
           .main-grid { grid-template-columns: minmax(0, 1fr) 360px; }
         }
 
@@ -1191,7 +1056,7 @@ export default function App() {
                     <div className="calendar-head">
                       <div className="calendar-title-wrap">
                         <div className="calendar-month">{`${calendarYear}.${String(calendarMonth + 1).padStart(2, "0")}`}</div>
-                        <div className="calendar-sub">날짜별 종료 매매 손익률 합계</div>
+                        <div className="calendar-sub">날짜별 종료 매매 손익</div>
                       </div>
                       <div className="calendar-nav">
                         <button type="button" className="icon-btn" onClick={goPrevMonth}>‹</button>
@@ -1209,10 +1074,10 @@ export default function App() {
                           <div key={entry.id} className="daily-row">
                             <div className="daily-left">
                               <div className="daily-market">{entry.market}</div>
-                              <div className="daily-meta">{entry.side} · {entry.setup} · {entry.status}</div>
+                              <div className="daily-meta">{entry.side} · {entry.status}</div>
                             </div>
                             <div className={`daily-pnl ${Number(entry.realizedPnlAmount || entry.pnl) >= 0 ? "positive" : "negative"}`}>
-                              <div>{entry.realizedPnlAmount ? `${Number(entry.realizedPnlAmount) > 0 ? "+" : ""}${entry.realizedPnlAmount}` : "-"}</div>
+                              <div>{entry.realizedPnlAmount ? formatMoney(entry.realizedPnlAmount) : "-"}</div>
                               <div style={{ fontSize: 11, opacity: 0.9 }}>{entry.pnl ? `${Number(entry.pnl) > 0 ? "+" : ""}${entry.pnl}%` : "미청산"}</div>
                             </div>
                           </div>
