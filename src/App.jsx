@@ -320,7 +320,7 @@ function ListItem({ entry, selected, onClick }) {
   );
 }
 
-function CalendarGrid({ cells, selectedDate, onSelectDate }) {
+function CalendarGrid({ cells, selectedDate, onSelectDate, viewMode }) {
   const weekDays = ["S", "M", "T", "W", "T", "F", "S"];
 
   return (
@@ -338,8 +338,17 @@ function CalendarGrid({ cells, selectedDate, onSelectDate }) {
           return (
             <button key={cell.key} type="button" onClick={() => onSelectDate(cell.key)} className={`calendar-cell ${tone} ${selected}`}>
               <div className="calendar-day">{cell.day}</div>
-              <div className="calendar-amount">{formatMoney(cell.amount)}</div>
-              <div className="calendar-pnl">{formatCalendarPercent(cell.percent)}</div>
+              {viewMode === "amount" ? (
+                <>
+                  <div className="calendar-amount">{formatMoney(cell.amount)}</div>
+                  <div className="calendar-pnl">{formatCalendarPercent(cell.percent)}</div>
+                </>
+              ) : (
+                <>
+                  <div className="calendar-amount">{formatCalendarPercent(cell.percent)}</div>
+                  <div className="calendar-pnl">{formatMoney(cell.amount)}</div>
+                </>
+              )}
             </button>
           );
         })}
@@ -370,12 +379,31 @@ export default function App() {
   const [calendarYear, setCalendarYear] = useState(now.getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(now.getMonth());
   const [selectedDate, setSelectedDate] = useState(getToday());
+  const [calendarViewMode, setCalendarViewMode] = useState("amount");
 
   const calendarCells = useMemo(() => buildMonthlyCalendarData(entries, calendarYear, calendarMonth), [entries, calendarYear, calendarMonth]);
   const selectedDateEntries = useMemo(
     () => entries.filter((entry) => entry.date === selectedDate).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
     [entries, selectedDate]
   );
+
+  const monthlySummary = useMemo(() => {
+    const monthPrefix = `${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}-`;
+    const monthEntries = entries.filter((entry) => entry.status === "종료" && String(entry.date || "").startsWith(monthPrefix));
+    const totalAmount = monthEntries.reduce((sum, entry) => {
+      const num = Number(entry.realizedPnlAmount);
+      return sum + (Number.isFinite(num) ? num : 0);
+    }, 0);
+    const totalPercent = monthEntries.reduce((sum, entry) => {
+      const num = Number(entry.pnl);
+      return sum + (Number.isFinite(num) ? num : 0);
+    }, 0);
+    return {
+      count: monthEntries.length,
+      totalAmount,
+      totalPercent,
+    };
+  }, [entries, calendarYear, calendarMonth]);
 
   const filteredEntries = useMemo(() => {
     const q = queryStringNormalize(queryText);
@@ -835,6 +863,53 @@ export default function App() {
         .calendar-month { font-size: 15px; font-weight: 700; color: #f8fafc; }
         .calendar-sub { font-size: 11px; color: #94a3b8; }
         .calendar-nav { display: flex; gap: 8px; }
+        .toggle-group {
+          display: inline-flex;
+          gap: 6px;
+          padding: 4px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.04);
+          margin-top: 8px;
+        }
+        .toggle-chip {
+          border: 0;
+          background: transparent;
+          color: #94a3b8;
+          padding: 7px 12px;
+          border-radius: 999px;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .toggle-chip-active {
+          background: #22d3ee;
+          color: #04111f;
+        }
+        .month-summary {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+          margin: 10px 0 12px;
+        }
+        .month-box {
+          border-radius: 14px;
+          border: 1px solid rgba(255,255,255,0.06);
+          background: rgba(255,255,255,0.04);
+          padding: 10px;
+        }
+        .month-box-label {
+          font-size: 10px;
+          color: #94a3b8;
+          line-height: 1.2;
+        }
+        .month-box-value {
+          margin-top: 6px;
+          font-size: 14px;
+          font-weight: 700;
+          color: #f8fafc;
+          line-height: 1.15;
+        }
         .icon-btn {
           width: 34px;
           height: 34px;
@@ -1057,6 +1132,10 @@ export default function App() {
                       <div className="calendar-title-wrap">
                         <div className="calendar-month">{`${calendarYear}.${String(calendarMonth + 1).padStart(2, "0")}`}</div>
                         <div className="calendar-sub">날짜별 종료 매매 손익</div>
+                        <div className="toggle-group">
+                          <button type="button" className={`toggle-chip ${calendarViewMode === "amount" ? "toggle-chip-active" : ""}`} onClick={() => setCalendarViewMode("amount")}>금액</button>
+                          <button type="button" className={`toggle-chip ${calendarViewMode === "percent" ? "toggle-chip-active" : ""}`} onClick={() => setCalendarViewMode("percent")}>퍼센트</button>
+                        </div>
                       </div>
                       <div className="calendar-nav">
                         <button type="button" className="icon-btn" onClick={goPrevMonth}>‹</button>
@@ -1064,7 +1143,22 @@ export default function App() {
                       </div>
                     </div>
 
-                    <CalendarGrid cells={calendarCells} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+                    <div className="month-summary">
+                      <div className="month-box">
+                        <div className="month-box-label">월 총 손익금</div>
+                        <div className={`month-box-value ${monthlySummary.totalAmount >= 0 ? "positive" : "negative"}`}>{monthlySummary.totalAmount ? formatMoney(monthlySummary.totalAmount) : "0"}</div>
+                      </div>
+                      <div className="month-box">
+                        <div className="month-box-label">월 누적 수익률</div>
+                        <div className={`month-box-value ${monthlySummary.totalPercent >= 0 ? "positive" : "negative"}`}>{monthlySummary.totalPercent ? formatCalendarPercent(monthlySummary.totalPercent) : "0%"}</div>
+                      </div>
+                      <div className="month-box">
+                        <div className="month-box-label">종료 매매 수</div>
+                        <div className="month-box-value">{monthlySummary.count}건</div>
+                      </div>
+                    </div>
+
+                    <CalendarGrid cells={calendarCells} selectedDate={selectedDate} onSelectDate={setSelectedDate} viewMode={calendarViewMode} />
 
                     <div className="daily-list">
                       {selectedDateEntries.length === 0 ? (
