@@ -855,10 +855,6 @@ export default function App() {
           box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18);
           background: rgba(2, 6, 23, 0.72);
         }
-        .control[type="date"] {
-          font-size: 13px;
-          padding-right: 8px;
-        }
         .control::placeholder { color: #64748b; }
         .textarea { min-height: 140px; resize: vertical; }
         .metrics-grid {
@@ -869,9 +865,8 @@ export default function App() {
         }
         .metric-card {
           min-width: 0;
-          overflow: hidden;
           border-radius: 20px;
-          padding: 14px 16px;
+          padding: 12px 12px 14px;
           border: 1px solid rgba(255,255,255,0.08);
           background: rgba(255,255,255,0.04);
         }
@@ -879,17 +874,17 @@ export default function App() {
         .metric-rose { background: rgba(244,63,94,0.08); border-color: rgba(244,63,94,0.16); }
         .metric-violet { background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.16); }
         .metric-label {
-          font-size: 12px;
+          font-size: 11px;
           color: #94a3b8;
-          white-space: nowrap;
+          line-height: 1.2;
         }
         .metric-value {
           margin-top: 8px;
-          font-size: clamp(16px, 1.9vw, 22px);
-          line-height: 1.1;
+          font-size: 16px;
+          line-height: 1.15;
           font-weight: 700;
           color: #f8fafc;
-          word-break: break-word;
+          white-space: nowrap;
         }
         .upload-box {
           min-height: 168px;
@@ -954,29 +949,28 @@ export default function App() {
         }
         .calendar-empty { min-height: 74px; }
         .calendar-cell {
-          min-height: 86px;
+          min-height: 82px;
           border-radius: 16px;
           border: 1px solid rgba(255,255,255,0.06);
           background: rgba(2,6,23,0.36);
           color: #e2e8f0;
-          padding: 10px 8px;
+          padding: 8px 6px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
           text-align: left;
           cursor: pointer;
-          overflow: hidden;
         }
         .calendar-profit { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.24); }
         .calendar-loss { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.24); }
         .calendar-selected { box-shadow: 0 0 0 2px rgba(34,211,238,0.45) inset; }
         .calendar-day { font-size: 12px; color: #cbd5e1; }
         .calendar-pnl {
-          font-size: 11px;
-          line-height: 1.15;
+          font-size: 10px;
+          line-height: 1.1;
           font-weight: 700;
           text-align: right;
-          word-break: break-word;
+          white-space: nowrap;
         }
         .daily-list {
           display: grid;
@@ -1004,7 +998,7 @@ export default function App() {
           .topbar-inner { flex-direction: row; align-items: center; justify-content: space-between; }
           .content-head { flex-direction: row; align-items: center; justify-content: space-between; }
           .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .metrics-grid { grid-template-columns: repeat(3, minmax(110px, 1fr)); }
+          .metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .config-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
@@ -1016,7 +1010,7 @@ export default function App() {
             top: 96px;
             align-self: start;
           }
-          .main-grid { grid-template-columns: minmax(0, 1fr) 360px; }
+          .main-grid { grid-template-columns: minmax(0, 1fr) 420px; }
         }
 
         @media (min-width: 1320px) {
@@ -1114,7 +1108,7 @@ export default function App() {
                         <Field label="방향"><Select value={form.side} onChange={(e) => updateForm("side", e.target.value)}><option value="Long">Long</option><option value="Short">Short</option></Select></Field>
                         <Field label="타임프레임"><Select value={form.timeframe} onChange={(e) => updateForm("timeframe", e.target.value)}><option value="5M">5M</option><option value="15M">15M</option><option value="1H">1H</option><option value="4H">4H</option><option value="1D">1D</option></Select></Field>
                         <Field label="전략"><Select value={form.strategy} onChange={(e) => updateForm("strategy", e.target.value)}><option value="반등매매">반등매매</option><option value="돌파매매">돌파매매</option><option value="추세추종">추세추종</option><option value="눌림목">눌림목</option><option value="스캘프">스캘프</option><option value="기타">기타</option></Select></Field>
-                        <Field label="날짜"><Input type="date" value={form.date} onChange={(e) => updateForm("date", e.target.value)} /></Field>
+                        <Field label="날짜"><Input type="text" value={form.date} onChange={(e) => updateForm("date", e.target.value)} placeholder="YYYY-MM-DD" /></Field>
                         <Field label="상태"><Select value={form.status} onChange={(e) => updateForm("status", e.target.value)}><option value="대기">대기</option><option value="진행중">진행중</option><option value="종료">종료</option></Select></Field>
                       </div>
                     </Section>
