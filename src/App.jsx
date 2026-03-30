@@ -23,6 +23,7 @@ import { getDownloadURL, getStorage, ref, uploadString } from "firebase/storage"
 const assetCategories = ["BTC", "알트", "국내주식", "해외주식"];
 const storageKey = "trading-journal-a-local";
 const firebaseConfigKey = "tv-journal-firebase-config";
+const settingsKey = "tv-journal-settings";
 
 function getToday() {
   return new Date().toISOString().slice(0, 10);
@@ -66,6 +67,12 @@ function createDefaultEntry() {
   };
 }
 
+function createSettingsForm(initial = {}) {
+  return {
+    startingCapital: initial.startingCapital || "10000",
+  };
+}
+
 function createFirebaseConfigForm(initial = {}) {
   return {
     apiKey: initial.apiKey || "",
@@ -100,6 +107,20 @@ function loadFirebaseConfig() {
 
 function saveFirebaseConfig(config) {
   localStorage.setItem(firebaseConfigKey, JSON.stringify(config));
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(settingsKey);
+    if (!raw) return createSettingsForm();
+    return createSettingsForm(JSON.parse(raw));
+  } catch {
+    return createSettingsForm();
+  }
+}
+
+function saveSettings(settings) {
+  localStorage.setItem(settingsKey, JSON.stringify(settings));
 }
 
 function safeParseEntries(raw) {
@@ -364,6 +385,7 @@ export default function App() {
   const [queryText, setQueryText] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("전체");
   const [firebaseConfig, setFirebaseConfig] = useState(createFirebaseConfigForm());
+  const [settings, setSettings] = useState(createSettingsForm());
   const [configOpen, setConfigOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -398,6 +420,27 @@ export default function App() {
       const num = Number(entry.pnl);
       return sum + (Number.isFinite(num) ? num : 0);
     }, 0);
+    const startingCapital = Number(settings.startingCapital);
+    const safeStartingCapital = Number.isFinite(startingCapital) ? startingCapital : 0;
+    const endingCapital = safeStartingCapital + totalAmount;
+    const equityRate = safeStartingCapital > 0 ? (totalAmount / safeStartingCapital) * 100 : 0;
+    return {
+      count: monthEntries.length,
+      totalAmount,
+      totalPercent,
+      startingCapital: safeStartingCapital,
+      endingCapital,
+      equityRate,
+    };
+  }, [entries, calendarYear, calendarMonth, settings.startingCapital]);
+    const totalAmount = monthEntries.reduce((sum, entry) => {
+      const num = Number(entry.realizedPnlAmount);
+      return sum + (Number.isFinite(num) ? num : 0);
+    }, 0);
+    const totalPercent = monthEntries.reduce((sum, entry) => {
+      const num = Number(entry.pnl);
+      return sum + (Number.isFinite(num) ? num : 0);
+    }, 0);
     return {
       count: monthEntries.length,
       totalAmount,
@@ -417,6 +460,7 @@ export default function App() {
 
   useEffect(() => {
     setFirebaseConfig(loadFirebaseConfig());
+    setSettings(loadSettings());
   }, []);
 
   useEffect(() => {
@@ -503,8 +547,14 @@ export default function App() {
     setFirebaseConfig((prev) => ({ ...prev, [key]: value }));
   }
 
+  function handleSettingsField(key, value) {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+  }));
+  }
+
   function applyFirebaseConfig() {
     saveFirebaseConfig(firebaseConfig);
+    saveSettings(settings);
     setConfigOpen(false);
     setSyncMessage(isFirebaseConfigReady(firebaseConfig) ? "Firebase 설정 저장됨" : "설정이 아직 완전하지 않음");
     window.location.reload();
@@ -888,7 +938,7 @@ export default function App() {
         }
         .month-summary {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 8px;
           margin: 10px 0 12px;
         }
@@ -909,6 +959,7 @@ export default function App() {
           font-weight: 700;
           color: #f8fafc;
           line-height: 1.15;
+          word-break: break-word;
         }
         .icon-btn {
           width: 34px;
@@ -972,6 +1023,7 @@ export default function App() {
         .negative { color: #f87171; }
 
         @media (min-width: 720px) {
+          .month-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
           .topbar-inner { flex-direction: row; align-items: center; justify-content: space-between; }
           .content-head { flex-direction: row; align-items: center; justify-content: space-between; }
           .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1011,6 +1063,7 @@ export default function App() {
             <Card className="card-pad">
               <div className="config-title">Firebase 설정</div>
               <div className="config-grid">
+                <Field label="시작 자산"><Input value={settings.startingCapital} onChange={(e) => handleSettingsField("startingCapital", e.target.value)} placeholder="예: 10000" /></Field>
                 <Field label="apiKey"><Input value={firebaseConfig.apiKey} onChange={(e) => handleConfigField("apiKey", e.target.value)} /></Field>
                 <Field label="authDomain"><Input value={firebaseConfig.authDomain} onChange={(e) => handleConfigField("authDomain", e.target.value)} /></Field>
                 <Field label="projectId"><Input value={firebaseConfig.projectId} onChange={(e) => handleConfigField("projectId", e.target.value)} /></Field>
@@ -1145,16 +1198,20 @@ export default function App() {
 
                     <div className="month-summary">
                       <div className="month-box">
-                        <div className="month-box-label">월 총 손익금</div>
+                        <div className="month-box-label">시작 자산</div>
+                        <div className="month-box-value">{monthlySummary.startingCapital ? formatMoney(monthlySummary.startingCapital) : "0"}</div>
+                      </div>
+                      <div className="month-box">
+                        <div className="month-box-label">종료 자산</div>
+                        <div className={`month-box-value ${monthlySummary.endingCapital >= monthlySummary.startingCapital ? "positive" : "negative"}`}>{monthlySummary.endingCapital ? formatMoney(monthlySummary.endingCapital) : "0"}</div>
+                      </div>
+                      <div className="month-box">
+                        <div className="month-box-label">월 손익금</div>
                         <div className={`month-box-value ${monthlySummary.totalAmount >= 0 ? "positive" : "negative"}`}>{monthlySummary.totalAmount ? formatMoney(monthlySummary.totalAmount) : "0"}</div>
                       </div>
                       <div className="month-box">
-                        <div className="month-box-label">월 누적 수익률</div>
-                        <div className={`month-box-value ${monthlySummary.totalPercent >= 0 ? "positive" : "negative"}`}>{monthlySummary.totalPercent ? formatCalendarPercent(monthlySummary.totalPercent) : "0%"}</div>
-                      </div>
-                      <div className="month-box">
-                        <div className="month-box-label">종료 매매 수</div>
-                        <div className="month-box-value">{monthlySummary.count}건</div>
+                        <div className="month-box-label">월 자산 수익률</div>
+                        <div className={`month-box-value ${monthlySummary.equityRate >= 0 ? "positive" : "negative"}`}>{monthlySummary.equityRate ? formatCalendarPercent(monthlySummary.equityRate) : "0%"}</div>
                       </div>
                     </div>
 
