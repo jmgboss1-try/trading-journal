@@ -380,6 +380,8 @@ export default function App() {
   const [firebaseConfig, setFirebaseConfig] = useState(createFirebaseConfigForm());
   const [settings, setSettings] = useState(createSettingsForm());
   const [configOpen, setConfigOpen] = useState(false);
+  const [entryMode, setEntryMode] = useState("trade");
+// trade | deposit | withdraw
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [syncMessage, setSyncMessage] = useState("브라우저 저장 모드");
