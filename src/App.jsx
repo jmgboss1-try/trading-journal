@@ -359,17 +359,10 @@ function CalendarGrid({ cells, selectedDate, onSelectDate, viewMode }) {
           return (
             <button key={cell.key} type="button" onClick={() => onSelectDate(cell.key)} className={`calendar-cell ${tone} ${selected}`}>
               <div className="calendar-day">{cell.day}</div>
-              {viewMode === "amount" ? (
-                <>
-                  <div className="calendar-amount">{formatMoney(cell.amount)}</div>
-                  <div className="calendar-pnl">{formatCalendarPercent(cell.percent)}</div>
-                </>
-              ) : (
-                <>
-                  <div className="calendar-amount">{formatCalendarPercent(cell.percent)}</div>
-                  <div className="calendar-pnl">{formatMoney(cell.amount)}</div>
-                </>
-              )}
+              <>
+  <div className="calendar-amount">{formatMoney(cell.amount)}</div>
+  <div className="calendar-pnl">{formatCalendarPercent(cell.percent)}</div>
+</>
             </button>
           );
         })}
@@ -401,8 +394,7 @@ export default function App() {
   const [calendarYear, setCalendarYear] = useState(now.getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(now.getMonth());
   const [selectedDate, setSelectedDate] = useState(getToday());
-  const [calendarViewMode, setCalendarViewMode] = useState("amount");
-
+  
   const calendarCells = useMemo(
     () => buildMonthlyCalendarData(entries, calendarYear, calendarMonth),
     [entries, calendarYear, calendarMonth]
@@ -1216,10 +1208,22 @@ export default function App() {
                       <div className="calendar-title-wrap">
                         <div className="calendar-month">{`${calendarYear}.${String(calendarMonth + 1).padStart(2, "0")}`}</div>
                         <div className="calendar-sub">날짜별 종료 매매 손익</div>
-                        <div className="toggle-group">
-                          <button type="button" className={`toggle-chip ${calendarViewMode === "amount" ? "toggle-chip-active" : ""}`} onClick={() => setCalendarViewMode("amount")}>금액</button>
-                          <button type="button" className={`toggle-chip ${calendarViewMode === "percent" ? "toggle-chip-active" : ""}`} onClick={() => setCalendarViewMode("percent")}>퍼센트</button>
-                        </div>
+                        <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+  <span style={{ fontSize: 12, color: "#94a3b8" }}>시작 자산</span>
+  <input
+    type="number"
+    value={settings.startingCapital || ""}
+    onChange={(e) =>
+      setSettings((prev) => ({
+        ...prev,
+        startingCapital: e.target.value,
+      }))
+    }
+    className="control"
+    placeholder="예: 10000"
+    style={{ maxWidth: 140, minHeight: 36, padding: "8px 10px" }}
+  />
+</div>
                       </div>
                       <div className="calendar-nav">
                         <button type="button" className="icon-btn" onClick={goPrevMonth}>‹</button>
@@ -1246,7 +1250,7 @@ export default function App() {
                       </div>
                     </div>
 
-                    <CalendarGrid cells={calendarCells} selectedDate={selectedDate} onSelectDate={setSelectedDate} viewMode={calendarViewMode} />
+                    <CalendarGrid cells={calendarCells} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
 
                     <div className="daily-list">
                       {selectedDateEntries.length === 0 ? (
