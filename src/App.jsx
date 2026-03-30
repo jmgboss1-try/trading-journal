@@ -404,10 +404,13 @@ export default function App() {
   const [calendarViewMode, setCalendarViewMode] = useState("amount");
 
   const calendarCells = useMemo(() => buildMonthlyCalendarData(entries, calendarYear, calendarMonth), [entries, calendarYear, calendarMonth]);
-  const selectedDateEntries = useMemo(
-    () => entries.filter((entry) => entry.date === selectedDate).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
-    [entries, selectedDate]
-  );
+const selectedDateEntries = useMemo(
+  () =>
+    entries
+      .filter((entry) => entry.date === selectedDate)
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
+  [entries, selectedDate]
+);
 
 const monthlySummary = useMemo(() => {
   const monthPrefix = `${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}-`;
