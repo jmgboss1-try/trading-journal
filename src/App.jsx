@@ -409,44 +409,43 @@ export default function App() {
     [entries, selectedDate]
   );
 
-  const monthlySummary = useMemo(() => {
-    const monthPrefix = `${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}-`;
-    const monthEntries = entries.filter((entry) => entry.status === "종료" && String(entry.date || "").startsWith(monthPrefix));
-    const totalAmount = monthEntries.reduce((sum, entry) => {
-      const num = Number(entry.realizedPnlAmount);
-      return sum + (Number.isFinite(num) ? num : 0);
-    }, 0);
-    const totalPercent = monthEntries.reduce((sum, entry) => {
-      const num = Number(entry.pnl);
-      return sum + (Number.isFinite(num) ? num : 0);
-    }, 0);
-    const startingCapital = Number(settings.startingCapital);
-    const safeStartingCapital = Number.isFinite(startingCapital) ? startingCapital : 0;
-    const endingCapital = safeStartingCapital + totalAmount;
-    const equityRate = safeStartingCapital > 0 ? (totalAmount / safeStartingCapital) * 100 : 0;
-    return {
-      count: monthEntries.length,
-      totalAmount,
-      totalPercent,
-      startingCapital: safeStartingCapital,
-      endingCapital,
-      equityRate,
-    };
-  }, [entries, calendarYear, calendarMonth, settings.startingCapital]);
-    const totalAmount = monthEntries.reduce((sum, entry) => {
-      const num = Number(entry.realizedPnlAmount);
-      return sum + (Number.isFinite(num) ? num : 0);
-    }, 0);
-    const totalPercent = monthEntries.reduce((sum, entry) => {
-      const num = Number(entry.pnl);
-      return sum + (Number.isFinite(num) ? num : 0);
-    }, 0);
-    return {
-      count: monthEntries.length,
-      totalAmount,
-      totalPercent,
-    };
-  }, [entries, calendarYear, calendarMonth]);
+const monthlySummary = useMemo(() => {
+  const monthPrefix = `${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}-`;
+
+  const monthEntries = entries.filter(
+    (entry) =>
+      entry.status === "종료" &&
+      String(entry.date || "").startsWith(monthPrefix)
+  );
+
+  const totalAmount = monthEntries.reduce((sum, entry) => {
+    const num = Number(entry.realizedPnlAmount);
+    return sum + (Number.isFinite(num) ? num : 0);
+  }, 0);
+
+  const totalPercent = monthEntries.reduce((sum, entry) => {
+    const num = Number(entry.pnl);
+    return sum + (Number.isFinite(num) ? num : 0);
+  }, 0);
+
+  const startingCapital = Number(settings.startingCapital);
+  const safeStartingCapital = Number.isFinite(startingCapital)
+    ? startingCapital
+    : 0;
+
+  const endingCapital = safeStartingCapital + totalAmount;
+  const equityRate =
+    safeStartingCapital > 0 ? (totalAmount / safeStartingCapital) * 100 : 0;
+
+  return {
+    count: monthEntries.length,
+    totalAmount,
+    totalPercent,
+    startingCapital: safeStartingCapital,
+    endingCapital,
+    equityRate,
+  };
+}, [entries, calendarYear, calendarMonth, settings.startingCapital]);
 
   const filteredEntries = useMemo(() => {
     const q = queryStringNormalize(queryText);
