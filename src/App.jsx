@@ -621,7 +621,101 @@ const [withdrawForm, setWithdrawForm] = useState({
   }
 
   async function saveEntry() {
-    const nextEntry = recalculateEntry(form);
+      if (entryMode === "deposit") {
+    const amount = Number(depositForm.amount);
+    if (!amount) return;
+
+    const newEntry = {
+      id: createId(),
+      type: "deposit",
+      category: "입금",
+      market: "입금",
+      side: "-",
+      status: "종료",
+      date: depositForm.date,
+      amount,
+      note: depositForm.note,
+      updatedAt: Date.now(),
+    };
+
+    if (user && isFirebaseConfigReady(firebaseConfig)) {
+      try {
+        setIsSavingCloud(true);
+        const { db } = getFirebaseServices(firebaseConfig);
+        await setDoc(
+          doc(db, "users", user.uid, "entries", newEntry.id),
+          { ...newEntry, userId: user.uid, updatedAt: serverTimestamp() },
+          { merge: true }
+        );
+      } catch {
+        setSyncMessage("클라우드 저장 실패 · 로컬 저장으로 유지");
+      } finally {
+        setIsSavingCloud(false);
+      }
+    }
+
+    setEntries((prev) => [newEntry, ...prev]);
+    setDepositForm({
+      date: getToday(),
+      amount: "",
+      note: "",
+    });
+    setSelectedId(newEntry.id);
+    setSelectedDate(newEntry.date);
+    setEntryMode("trade");
+    setSyncMessage(user ? "입금 기록 저장됨" : "브라우저에 입금 기록 저장됨");
+    return;
+  }
+
+  if (entryMode === "withdraw") {
+    const amount = Number(withdrawForm.amount);
+    if (!amount) return;
+
+    const newEntry = {
+      id: createId(),
+      type: "withdraw",
+      category: "출금",
+      market: "출금",
+      side: "-",
+      status: "종료",
+      date: withdrawForm.date,
+      amount,
+      note: withdrawForm.note,
+      updatedAt: Date.now(),
+    };
+
+    if (user && isFirebaseConfigReady(firebaseConfig)) {
+      try {
+        setIsSavingCloud(true);
+        const { db } = getFirebaseServices(firebaseConfig);
+        await setDoc(
+          doc(db, "users", user.uid, "entries", newEntry.id),
+          { ...newEntry, userId: user.uid, updatedAt: serverTimestamp() },
+          { merge: true }
+        );
+      } catch {
+        setSyncMessage("클라우드 저장 실패 · 로컬 저장으로 유지");
+      } finally {
+        setIsSavingCloud(false);
+      }
+    }
+
+    setEntries((prev) => [newEntry, ...prev]);
+    setWithdrawForm({
+      date: getToday(),
+      amount: "",
+      note: "",
+    });
+    setSelectedId(newEntry.id);
+    setSelectedDate(newEntry.date);
+    setEntryMode("trade");
+    setSyncMessage(user ? "출금 기록 저장됨" : "브라우저에 출금 기록 저장됨");
+    return;
+  }
+    const nextEntry = recalculateEntry({
+  ...form,
+  type: "trade",
+});
     setForm(nextEntry);
 
     if (user && isFirebaseConfigReady(firebaseConfig)) {
