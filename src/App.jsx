@@ -1245,6 +1245,84 @@ const [withdrawForm, setWithdrawForm] = useState({
                   </div>
                 </div>
       )}
+                {entryMode === "deposit" && (
+  <div className="left-stack">
+    <Section title="입금">
+      <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
+        <Field label="날짜">
+          <Input
+            type="date"
+            value={depositForm.date}
+            onChange={(e) =>
+              setDepositForm((prev) => ({ ...prev, date: e.target.value }))
+            }
+          />
+        </Field>
+
+        <Field label="금액">
+          <Input
+            type="number"
+            value={depositForm.amount}
+            onChange={(e) =>
+              setDepositForm((prev) => ({ ...prev, amount: e.target.value }))
+            }
+            placeholder="예: 2000"
+          />
+        </Field>
+
+        <Field label="메모">
+          <Textarea
+            rows={8}
+            value={depositForm.note}
+            onChange={(e) =>
+              setDepositForm((prev) => ({ ...prev, note: e.target.value }))
+            }
+            placeholder="예: 추가 입금"
+          />
+        </Field>
+      </div>
+    </Section>
+  </div>
+)}
+                {entryMode === "withdraw" && (
+  <div className="left-stack">
+    <Section title="출금">
+      <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
+        <Field label="날짜">
+          <Input
+            type="date"
+            value={withdrawForm.date}
+            onChange={(e) =>
+              setWithdrawForm((prev) => ({ ...prev, date: e.target.value }))
+            }
+          />
+        </Field>
+
+        <Field label="금액">
+          <Input
+            type="number"
+            value={withdrawForm.amount}
+            onChange={(e) =>
+              setWithdrawForm((prev) => ({ ...prev, amount: e.target.value }))
+            }
+            placeholder="예: 500"
+          />
+        </Field>
+
+        <Field label="메모">
+          <Textarea
+            rows={8}
+            value={withdrawForm.note}
+            onChange={(e) =>
+              setWithdrawForm((prev) => ({ ...prev, note: e.target.value }))
+            }
+            placeholder="예: 생활비 출금"
+          />
+        </Field>
+      </div>
+    </Section>
+  </div>
+)}
 
                 <div className="right-stack">
                   <Section title="월별 대시보드">
