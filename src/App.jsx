@@ -382,6 +382,17 @@ export default function App() {
   const [configOpen, setConfigOpen] = useState(false);
   const [entryMode, setEntryMode] = useState("trade");
 // trade | deposit | withdraw
+   const [depositForm, setDepositForm] = useState({
+  date: getToday(),
+  amount: "",
+  note: "",
+});
+
+const [withdrawForm, setWithdrawForm] = useState({
+  date: getToday(),
+  amount: "",
+  note: "",
+});
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [syncMessage, setSyncMessage] = useState("브라우저 저장 모드");
@@ -396,7 +407,7 @@ export default function App() {
   const [calendarYear, setCalendarYear] = useState(now.getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(now.getMonth());
   const [selectedDate, setSelectedDate] = useState(getToday());
-  
+
   const calendarCells = useMemo(
     () => buildMonthlyCalendarData(entries, calendarYear, calendarMonth),
     [entries, calendarYear, calendarMonth]
@@ -1180,6 +1191,7 @@ export default function App() {
               </div>
 
               <div className="main-grid">
+                {entryMode === "trade" && (
                 <div className="left-stack">
                   <div className="two-col">
                     <Section title="BTC 기본 정보">
@@ -1232,6 +1244,7 @@ export default function App() {
                     </Section>
                   </div>
                 </div>
+      )}
 
                 <div className="right-stack">
                   <Section title="월별 대시보드">
