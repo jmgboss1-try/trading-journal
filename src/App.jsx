@@ -1065,15 +1065,44 @@ export default function App() {
               <h1 className="brand-title">📈 Trading Journal A</h1>
               <div className="brand-sub">{syncMessage}</div>
             </div>
-            <div className="topbar-actions">
-              <Button variant="outline" onClick={() => setConfigOpen((prev) => !prev)}>Firebase 설정</Button>
-              {user ? (
-                <Button variant="outline" onClick={signOutGoogle}>로그아웃</Button>
-              ) : (
-                <Button onClick={signInWithGoogle} disabled={!authReady}>Google 로그인</Button>
-              )}
-              <Button onClick={newEntry}>+ 새 기록</Button>
-            </div>
+<div className="topbar-actions">
+  <Button variant="outline" onClick={() => setConfigOpen((prev) => !prev)}>
+    Firebase 설정
+  </Button>
+
+  {user ? (
+    <Button variant="outline" onClick={signOutGoogle}>로그아웃</Button>
+  ) : (
+    <Button onClick={signInWithGoogle} disabled={!authReady}>Google 로그인</Button>
+  )}
+
+  <Button
+    onClick={() => {
+      setEntryMode("trade");
+      newEntry();
+    }}
+  >
+    + 새 기록
+  </Button>
+
+  <Button
+    variant="outline"
+    onClick={() => {
+      setEntryMode("deposit");
+    }}
+  >
+    + 입금
+  </Button>
+
+  <Button
+    variant="outline"
+    onClick={() => {
+      setEntryMode("withdraw");
+    }}
+  >
+    - 출금
+  </Button>
+</div>
           </div>
         </header>
 
