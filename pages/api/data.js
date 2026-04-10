@@ -7,6 +7,7 @@ const redis = new Redis({
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
+
   try {
     if (req.method === 'GET') {
       const { key } = req.query;
@@ -26,8 +27,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    return res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
     console.error('Redis error:', err);
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 }
