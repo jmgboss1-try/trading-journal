@@ -649,8 +649,20 @@ function RecordTab({ onAdd }) {
 
   const handleSave = () => {
     if (!form.symbol.trim()) { alert("종목명을 입력해주세요"); return; }
-    if (!form.entry || !form.exit || !form.qty) { alert("진입가, 청산가, 수량을 입력해주세요"); return; }
-    const trade = { id: Date.now(), date: form.date, assetKey: ASSET_KEYS[form.assetIdx], symbol: form.symbol.trim(), dir: form.dir, entry: parseFloat(form.entry), exit: parseFloat(form.exit), qty: parseFloat(form.qty), lev: parseFloat(form.lev) || 1, sl: parseFloat(form.sl) || null, tp: parseFloat(form.tp) || null, risk: form.risk, emotion: form.emotion, memo: form.memo, currency: form.currency, chartImg: imgBase64 || null, pnl: Math.round(pnl * 100) / 100, pct: Math.round(pct * 100) / 100 };
+    if (!form.entry || !form.qty) { alert("진입가, 수량을 입력해주세요"); return; }
+    const isOpen = !form.exit || parseFloat(form.exit) === 0;
+    const trade = {
+      id: Date.now(), date: form.date, assetKey: ASSET_KEYS[form.assetIdx],
+      symbol: form.symbol.trim(), dir: form.dir,
+      entry: parseFloat(form.entry), exit: isOpen ? null : parseFloat(form.exit),
+      qty: parseFloat(form.qty), lev: parseFloat(form.lev) || 1,
+      sl: parseFloat(form.sl) || null, tp: parseFloat(form.tp) || null,
+      risk: form.risk, emotion: form.emotion, memo: form.memo,
+      currency: form.currency, chartImg: imgBase64 || null,
+      status: isOpen ? "홀딩" : "청산",
+      pnl: isOpen ? 0 : Math.round(pnl * 100) / 100,
+      pct: isOpen ? 0 : Math.round(pct * 100) / 100
+    };
     onAdd(trade); setSaved(true); setImgBase64(null); setImgPreview(null); setScanMsg("");
     setTimeout(() => setSaved(false), 2000);
     setForm(f => ({ ...f, symbol: "", entry: "", exit: "", qty: "", lev: "1", sl: "", tp: "", risk: 5, emotion: "", memo: "" }));
@@ -774,12 +786,15 @@ function HistoryTab({ trades, onDelete, onEdit, setModal }) {
                       <span style={{ fontWeight: 700, fontSize: 15 }}>{t.symbol}</span>
                       <Badge type={t.dir} />
                       <span style={{ fontSize: 10, color: s.muted }}>{t.lev}x</span>
+                      {t.status === "홀딩" && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 8, background: "rgba(255,224,102,0.15)", color: s.accent3, border: "1px solid rgba(255,224,102,0.3)", fontWeight: 700 }}>홀딩중</span>}
                     </div>
                     <div style={{ fontSize: 11, color: s.muted, marginBottom: 6 }}>{t.date} • {t.assetKey}</div>
                     <div style={{ display: "flex", gap: 16 }}>
-                      <div><div style={{ fontSize: 10, color: s.muted }}>진입→청산</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{t.entry.toLocaleString()} → {t.exit.toLocaleString()}</div></div>
-                      <div><div style={{ fontSize: 10, color: s.muted }}>손익</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700, color: t.pnl >= 0 ? s.green : s.red }}>{fmt(t.pnl, t.currency)}</div></div>
-                      <div><div style={{ fontSize: 10, color: s.muted }}>수익률</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: t.pct >= 0 ? s.green : s.red }}>{fmtPct(t.pct)}</div></div>
+                      <div><div style={{ fontSize: 10, color: s.muted }}>진입→청산</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{t.entry?.toLocaleString()} → {t.exit ? t.exit.toLocaleString() : <span style={{ color: s.accent3 }}>홀딩</span>}</div></div>
+                      {t.status !== "홀딩" && <>
+                        <div><div style={{ fontSize: 10, color: s.muted }}>손익</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700, color: t.pnl >= 0 ? s.green : s.red }}>{fmt(t.pnl, t.currency)}</div></div>
+                        <div><div style={{ fontSize: 10, color: s.muted }}>수익률</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: t.pct >= 0 ? s.green : s.red }}>{fmtPct(t.pct)}</div></div>
+                      </>}
                     </div>
                     {t.emotion && <div style={{ marginTop: 6, fontSize: 11, color: s.muted }}>{t.emotion}</div>}
                   </div>
@@ -826,8 +841,19 @@ function EditTradeForm({ trade, onSave, onCancel }) {
   const pct = calcPct(form.entry, form.exit, form.dir, form.lev);
 
   const handleSave = () => {
-    if (!form.symbol.trim() || !form.entry || !form.exit || !form.qty) { return; }
-    const updated = { ...trade, date: form.date, assetKey: ASSET_KEYS[form.assetIdx], symbol: form.symbol.trim(), dir: form.dir, entry: parseFloat(form.entry), exit: parseFloat(form.exit), qty: parseFloat(form.qty), lev: parseFloat(form.lev) || 1, sl: parseFloat(form.sl) || null, tp: parseFloat(form.tp) || null, risk: form.risk, emotion: form.emotion, memo: form.memo, currency: form.currency, pnl: Math.round(pnl * 100) / 100, pct: Math.round(pct * 100) / 100 };
+    if (!form.symbol.trim() || !form.entry || !form.qty) { return; }
+    const isOpen = !form.exit || parseFloat(form.exit) === 0;
+    const updated = {
+      ...trade, date: form.date, assetKey: ASSET_KEYS[form.assetIdx],
+      symbol: form.symbol.trim(), dir: form.dir,
+      entry: parseFloat(form.entry), exit: isOpen ? null : parseFloat(form.exit),
+      qty: parseFloat(form.qty), lev: parseFloat(form.lev) || 1,
+      sl: parseFloat(form.sl) || null, tp: parseFloat(form.tp) || null,
+      risk: form.risk, emotion: form.emotion, memo: form.memo, currency: form.currency,
+      status: isOpen ? "홀딩" : "청산",
+      pnl: isOpen ? 0 : Math.round(pnl * 100) / 100,
+      pct: isOpen ? 0 : Math.round(pct * 100) / 100
+    };
     onSave(updated);
   };
 
