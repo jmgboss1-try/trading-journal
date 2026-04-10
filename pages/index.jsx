@@ -161,9 +161,13 @@ export default function App() {
 
   useEffect(() => {
     const load = async () => {
-      try { const t = await loadData("trades"); if (t) setTrades(JSON.parse(t)); } catch (e) {}
-      try { const c = await loadData("capitals"); if (c) setCapitals(JSON.parse(c)); } catch (e) {}
-      try { const cf = await loadData("cashflows"); if (cf) setCashflows(JSON.parse(cf)); } catch (e) {}
+      try {
+        const timeout = (ms) => new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms));
+        const safeLoad = (key) => Promise.race([loadData(key), timeout(5000)]);
+        try { const t = await safeLoad("trades"); if (t) setTrades(JSON.parse(t)); } catch (e) {}
+        try { const c = await safeLoad("capitals"); if (c) setCapitals(JSON.parse(c)); } catch (e) {}
+        try { const cf = await safeLoad("cashflows"); if (cf) setCashflows(JSON.parse(cf)); } catch (e) {}
+      } catch (e) {}
       setLoaded(true);
     };
     load();
@@ -622,7 +626,7 @@ function RecordTab({ onAdd }) {
     const validMime = ["image/jpeg", "image/png", "image/gif", "image/webp"].includes(imgMime) ? imgMime : "image/jpeg";
     const prompt = "이 트레이딩 캡처 이미지에서 매매 정보를 추출하여 다음 JSON 형식으로만 응답하세요. 추출 불가는 null:\n{\"symbol\":\"종목명\",\"dir\":\"롱 또는 숏\",\"entry\":숫자,\"exit\":숫자,\"qty\":숫자,\"lev\":숫자,\"date\":\"YYYY-MM-DD\",\"currency\":\"₩ 또는 USD 또는 USDT\",\"assetKey\":\"국내주식 또는 해외주식 또는 암호화폐(현물) 또는 암호화폐(선물)\",\"memo\":\"특이사항\"}";
     try {
-      const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: validMime, data: imgBase64 } }, { type: "text", text: prompt }] }] }) });
+      const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: validMime, data: imgBase64 } }, { type: "text", text: prompt }] }] }) });
       const data = await res.json();
       const raw = data.content?.map(c => c.text || "").join("") || "";
       const m = raw.match(/\{[\s\S]*\}/);
@@ -1065,7 +1069,7 @@ function AITab({ trades }) {
     const validChartMime = ["image/jpeg", "image/png", "image/gif", "image/webp"].includes(chartMime) ? chartMime : "image/jpeg";
     const prompt = "당신은 전문 트레이딩 코치입니다. 이 차트 이미지를 분석하여 한국어로 복기 피드백을 제공해주세요.\n1. 추세와 패턴\n2. 진입/청산 포인트 적절성\n3. 지지/저항 레벨\n4. 잘한 점과 개선할 점\n5. 다음 대응법" + (chartQ ? "\n\n추가질문: " + chartQ : "");
     try {
-      const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: validChartMime, data: chartBase64 } }, { type: "text", text: prompt }] }] }) });
+      const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: validChartMime, data: chartBase64 } }, { type: "text", text: prompt }] }] }) });
       const data = await res.json();
       setChartAnalysis(data.content?.map(c => c.text || "").join("") || "응답 없음");
     } catch (e) { setChartAnalysis("❌ 오류: " + e.message); }
@@ -1087,7 +1091,7 @@ function AITab({ trades }) {
     if (!trades.length) { setResponse("❌ 거래 기록이 없습니다."); return; }
     setLoading(true); setResponse("");
     try {
-      const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: PROMPTS[aiType] + buildSummary() + (question ? "\n\n추가질문: " + question : "") }] }) });
+      const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: PROMPTS[aiType] + buildSummary() + (question ? "\n\n추가질문: " + question : "") }] }) });
       const data = await res.json();
       setResponse(data.content?.map(c => c.text || "").join("") || "응답 없음");
     } catch (e) { setResponse("❌ 오류: " + e.message); }
@@ -1098,7 +1102,7 @@ function AITab({ trades }) {
     setSingleLoading(t.id);
     const prompt = "트레이딩 코치로서 다음 거래에 대해 2-3문장으로 간결한 한국어 피드백을 주세요:\n종목: " + t.symbol + "(" + t.assetKey + ") " + t.dir + " " + t.lev + "x\n진입:" + t.entry + " 청산:" + t.exit + " 손익:" + t.pnl + "(" + t.pct + "%)\n감정:" + (t.emotion || "미기록") + " 리스크:" + t.risk + "/10\n메모:" + (t.memo || "없음");
     try {
-      const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }) });
+      const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }) });
       const data = await res.json();
       return data.content?.map(c => c.text || "").join("") || "응답 없음";
     } catch (e) { return "❌ 오류: " + e.message; }
