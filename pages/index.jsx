@@ -164,9 +164,10 @@ export default function App() {
       try {
         const timeout = (ms) => new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms));
         const safeLoad = (key) => Promise.race([loadData(key), timeout(5000)]);
-        try { const t = await safeLoad("trades"); if (t) setTrades(JSON.parse(t)); } catch (e) {}
-        try { const c = await safeLoad("capitals"); if (c) setCapitals(JSON.parse(c)); } catch (e) {}
-        try { const cf = await safeLoad("cashflows"); if (cf) setCashflows(JSON.parse(cf)); } catch (e) {}
+        const parse = (v) => { if (!v) return null; if (typeof v === "string") return JSON.parse(v); return v; };
+        try { const t = await safeLoad("trades"); if (t) setTrades(parse(t)); } catch (e) {}
+        try { const c = await safeLoad("capitals"); if (c) setCapitals(parse(c)); } catch (e) {}
+        try { const cf = await safeLoad("cashflows"); if (cf) setCashflows(parse(cf)); } catch (e) {}
       } catch (e) {}
       setLoaded(true);
     };
