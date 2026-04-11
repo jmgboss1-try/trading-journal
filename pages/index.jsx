@@ -603,6 +603,21 @@ function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency,
   );
 }
 
+// LegRow는 반드시 컴포넌트 밖에 정의해야 포커스가 안 날아감
+function LegRow({ leg, onChange, onRemove, canRemove, label }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 1fr 1fr auto", gap: 8, alignItems: "end" }}>
+      <FormField label={label + " 날짜"}><input type="date" value={leg.date} onChange={e => onChange("date", e.target.value)} /></FormField>
+      <FormField label="시간(선택)"><input type="text" placeholder="09:30" value={leg.time} onChange={e => onChange("time", e.target.value)} style={{ fontSize: 13 }} /></FormField>
+      <FormField label="가격"><input type="number" placeholder="0" value={leg.price} onChange={e => onChange("price", e.target.value)} /></FormField>
+      <FormField label="수량"><input type="number" placeholder="0" value={leg.qty} onChange={e => onChange("qty", e.target.value)} /></FormField>
+      {canRemove
+        ? <button onClick={onRemove} style={{ background: "rgba(255,61,113,0.1)", border: "1px solid rgba(255,61,113,0.3)", color: s.red, width: 36, height: 36, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 22, flexShrink: 0 }}><X size={13} /></button>
+        : <div style={{ width: 36 }} />}
+    </div>
+  );
+}
+
 function RecordTab({ onAdd, strategies }) {
   const emptyLeg = () => ({ date: todayStr(), time: "", price: "", qty: "" });
   const [entries, setEntries] = useState([emptyLeg()]);
@@ -729,18 +744,6 @@ function RecordTab({ onAdd, strategies }) {
     setEntries([emptyLeg()]); setExits([]);
     setMeta(m => ({ ...m, symbol: "", lev: "1", sl: "", tp: "", risk: 5, emotion: "", memo: "", entryZone: "", slType: "", slHit: "", stophunt: "" }));
   };
-
-  const LegRow = ({ leg, onChange, onRemove, canRemove, label }) => (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 1fr 1fr auto", gap: 8, alignItems: "end" }}>
-      <FormField label={label + " 날짜"}><input type="date" value={leg.date} onChange={e => onChange("date", e.target.value)} /></FormField>
-      <FormField label="시간"><input type="time" value={leg.time} onChange={e => onChange("time", e.target.value)} style={{ fontSize: 12 }} /></FormField>
-      <FormField label="가격"><input type="number" placeholder="0" value={leg.price} onChange={e => onChange("price", e.target.value)} /></FormField>
-      <FormField label="수량"><input type="number" placeholder="0" value={leg.qty} onChange={e => onChange("qty", e.target.value)} /></FormField>
-      {canRemove
-        ? <button onClick={onRemove} style={{ background: "rgba(255,61,113,0.1)", border: "1px solid rgba(255,61,113,0.3)", color: s.red, width: 36, height: 36, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 22, flexShrink: 0 }}><X size={13} /></button>
-        : <div style={{ width: 36 }} />}
-    </div>
-  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, animation: "fadeIn 0.3s ease" }}>
@@ -895,6 +898,7 @@ function HistoryTab({ trades, onDelete, onEdit, setModal }) {
   const [filter, setFilter] = useState({ asset: "", dir: "", result: "", symbol: "" });
   const [confirmId, setConfirmId] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
+  const [addLegTarget, setAddLegTarget] = useState(null); // { trade, type: "entry"|"exit" }
   const set = (k, v) => setFilter(f => ({ ...f, [k]: v }));
 
   const filtered = trades.filter(t => {
@@ -906,8 +910,42 @@ function HistoryTab({ trades, onDelete, onEdit, setModal }) {
     return true;
   });
 
+  const handleAddLeg = (trade, type, leg) => {
+    const newLeg = { date: leg.date, time: leg.time, price: parseFloat(leg.price) || 0, qty: parseFloat(leg.qty) || 0 };
+    const entries = [...(trade.entries || [{ date: trade.date, time: "", price: trade.entry || 0, qty: trade.qty || 0 }])];
+    const exits = [...(trade.exits || (trade.exit ? [{ date: trade.date, time: "", price: trade.exit, qty: trade.qty || 0 }] : []))];
+
+    if (type === "entry") entries.push(newLeg);
+    else exits.push(newLeg);
+
+    // 재계산
+    const totalEQty = entries.reduce((a, e) => a + e.qty, 0);
+    const avgEntry = totalEQty > 0 ? entries.reduce((a, e) => a + e.price * e.qty, 0) / totalEQty : 0;
+    const totalXQty = exits.reduce((a, e) => a + e.qty, 0);
+    const avgExit = totalXQty > 0 ? exits.reduce((a, e) => a + e.price * e.qty, 0) / totalXQty : 0;
+    const lev = trade.lev || 1;
+    const closedQty = Math.min(totalEQty, totalXQty);
+    const pnl = avgEntry > 0 && avgExit > 0 && closedQty > 0
+      ? Math.round(((trade.dir === "숏" ? (avgEntry - avgExit) : (avgExit - avgEntry)) * closedQty * lev) * 100) / 100
+      : 0;
+    const pct = avgEntry > 0 && avgExit > 0
+      ? Math.round(((trade.dir === "숏" ? (avgEntry - avgExit) : (avgExit - avgEntry)) / avgEntry * 100 * lev) * 100) / 100
+      : 0;
+    const isFullyClosed = totalXQty >= totalEQty && totalEQty > 0;
+    const isPartial = totalXQty > 0 && totalXQty < totalEQty;
+    const status = isFullyClosed ? "청산" : (isPartial ? "부분청산" : "홀딩");
+
+    const updated = { ...trade, entries, exits, entry: Math.round(avgEntry * 100) / 100, exit: (isFullyClosed || isPartial) ? Math.round(avgExit * 100) / 100 : null, qty: totalEQty, pnl, pct, status };
+    onEdit(updated);
+    setAddLegTarget(null);
+  };
+
   if (editTarget) {
     return <EditTradeForm trade={editTarget} onSave={(updated) => { onEdit(updated); setEditTarget(null); }} onCancel={() => setEditTarget(null)} />;
+  }
+
+  if (addLegTarget) {
+    return <AddLegForm trade={addLegTarget.trade} type={addLegTarget.type} onSave={(leg) => handleAddLeg(addLegTarget.trade, addLegTarget.type, leg)} onCancel={() => setAddLegTarget(null)} />;
   }
 
   return (
@@ -930,16 +968,22 @@ function HistoryTab({ trades, onDelete, onEdit, setModal }) {
                     <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
                       <span style={{ fontWeight: 700, fontSize: 15 }}>{t.symbol}</span>
                       <Badge type={t.dir} />
-                      <span style={{ fontSize: 10, color: s.muted }}>{t.lev}x</span>
+                      {t.lev > 1 && <span style={{ fontSize: 10, color: s.muted }}>{t.lev}x</span>}
                       {t.status === "홀딩" && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 8, background: "rgba(255,224,102,0.15)", color: s.accent3, border: "1px solid rgba(255,224,102,0.3)", fontWeight: 700 }}>홀딩중</span>}
+                      {t.status === "부분청산" && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 8, background: "rgba(0,229,255,0.1)", color: s.accent, border: "1px solid rgba(0,229,255,0.2)", fontWeight: 700 }}>부분청산</span>}
                     </div>
                     <div style={{ fontSize: 11, color: s.muted, marginBottom: 6 }}>{t.date} • {t.assetKey}</div>
-                    <div style={{ display: "flex", gap: 16 }}>
+                    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                       <div><div style={{ fontSize: 10, color: s.muted }}>진입→청산</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{t.entry?.toLocaleString()} → {t.exit ? t.exit.toLocaleString() : <span style={{ color: s.accent3 }}>홀딩</span>}</div></div>
                       {t.status !== "홀딩" && <>
                         <div><div style={{ fontSize: 10, color: s.muted }}>손익</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700, color: t.pnl >= 0 ? s.green : s.red }}>{fmt(t.pnl, t.currency)}</div></div>
                         <div><div style={{ fontSize: 10, color: s.muted }}>수익률</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: t.pct >= 0 ? s.green : s.red }}>{fmtPct(t.pct)}</div></div>
                       </>}
+                    </div>
+                    {/* 추가 진입/청산 버튼 */}
+                    <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                      <button onClick={e => { e.stopPropagation(); setAddLegTarget({ trade: t, type: "entry" }); }} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(0,230,118,0.4)", background: "rgba(0,230,118,0.08)", color: s.green, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>+ 추가진입</button>
+                      <button onClick={e => { e.stopPropagation(); setAddLegTarget({ trade: t, type: "exit" }); }} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(255,61,113,0.4)", background: "rgba(255,61,113,0.08)", color: s.red, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>+ 청산추가</button>
                     </div>
                     {t.emotion && <div style={{ marginTop: 6, fontSize: 11, color: s.muted }}>{t.emotion}</div>}
                   </div>
@@ -967,6 +1011,69 @@ function HistoryTab({ trades, onDelete, onEdit, setModal }) {
           </div>
         )
       }
+    </div>
+  );
+}
+
+function AddLegForm({ trade, type, onSave, onCancel }) {
+  const [leg, setLeg] = useState({ date: todayStr(), time: "", price: "", qty: "" });
+  const setL = (k, v) => setLeg(f => ({ ...f, [k]: v }));
+  const isEntry = type === "entry";
+  const color = isEntry ? s.green : s.red;
+  const label = isEntry ? "추가 진입" : "청산";
+
+  const handleSave = () => {
+    if (!leg.price || !leg.qty) { alert("가격과 수량을 입력해주세요"); return; }
+    onSave(leg);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, animation: "fadeIn 0.3s ease" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={onCancel} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 8, color: s.muted, padding: "8px 14px", cursor: "pointer", fontSize: 13 }}>← 취소</button>
+        <div style={{ fontWeight: 700, fontSize: 15 }}>{trade.symbol} — {label} 기록</div>
+      </div>
+
+      {/* 기존 포지션 현황 */}
+      <Card>
+        <div style={{ fontSize: 11, color: s.muted, marginBottom: 10 }}>현재 포지션</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px,1fr))", gap: 10 }}>
+          <div><div style={{ fontSize: 10, color: s.muted }}>종목</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700 }}>{trade.symbol}</div></div>
+          <div><div style={{ fontSize: 10, color: s.muted }}>방향</div><div style={{ fontSize: 13, color: trade.dir === "롱" ? s.green : s.red, fontWeight: 700 }}>{trade.dir}</div></div>
+          <div><div style={{ fontSize: 10, color: s.muted }}>총 수량</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13 }}>{trade.qty}</div></div>
+          <div><div style={{ fontSize: 10, color: s.muted }}>평균 진입가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13 }}>{trade.entry?.toLocaleString()}</div></div>
+          <div><div style={{ fontSize: 10, color: s.muted }}>상태</div><div style={{ fontSize: 13, color: s.accent3, fontWeight: 700 }}>{trade.status || "홀딩"}</div></div>
+        </div>
+      </Card>
+
+      {/* 입력 폼 */}
+      <Card accent={color}>
+        <div style={{ fontSize: 11, color, fontWeight: 700, marginBottom: 14 }}>
+          {isEntry ? "📈 추가 진입 정보" : "📉 청산 정보"}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 12 }}>
+            <FormField label="날짜"><input type="date" value={leg.date} onChange={e => setL("date", e.target.value)} /></FormField>
+            <FormField label="시간(선택)"><input type="text" placeholder="09:30" value={leg.time} onChange={e => setL("time", e.target.value)} /></FormField>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label={isEntry ? "진입가" : "청산가"}><input type="number" placeholder="0" value={leg.price} onChange={e => setL("price", e.target.value)} /></FormField>
+            <FormField label="수량"><input type="number" placeholder="0" value={leg.qty} onChange={e => setL("qty", e.target.value)} /></FormField>
+          </div>
+          {leg.price && leg.qty && (
+            <div style={{ padding: 12, background: s.surface2, borderRadius: 8, fontSize: 12, color: s.muted }}>
+              {isEntry
+                ? `추가 매수: ${parseFloat(leg.qty)}주 × ${parseFloat(leg.price).toLocaleString()} = ${(parseFloat(leg.price) * parseFloat(leg.qty)).toLocaleString()} ${trade.currency || "₩"}`
+                : `청산: ${parseFloat(leg.qty)}주 × ${parseFloat(leg.price).toLocaleString()} = ${(parseFloat(leg.price) * parseFloat(leg.qty)).toLocaleString()} ${trade.currency || "₩"}`
+              }
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <Btn onClick={handleSave} style={{ width: "100%", padding: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+        <Save size={15} /> {label} 저장
+      </Btn>
     </div>
   );
 }
