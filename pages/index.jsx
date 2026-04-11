@@ -158,6 +158,7 @@ export default function App() {
     entryZones: ["피보 0.786~0.886", "피보 1.13~1.414", "지지/저항", "추세선", "기타"],
     slTypes: ["피보 0.886 근처", "피보 1.414 근처", "전저점/전고점", "이평선", "기타"]
   });
+  const [activeAssets, setActiveAssets] = useState(["국내주식", "해외주식", "암호화폐(현물)", "암호화폐(선물)"]);
   const [showCapInput, setShowCapInput] = useState(false);
   const [capDrafts, setCapDrafts] = useState({});
   const [modal, setModal] = useState(null);
@@ -173,6 +174,7 @@ export default function App() {
         try { const c = await safeLoad("capitals"); if (c) setCapitals(parse(c)); } catch (e) {}
         try { const cf = await safeLoad("cashflows"); if (cf) setCashflows(parse(cf)); } catch (e) {}
         try { const st = await safeLoad("strategies"); if (st) setStrategies(parse(st)); } catch (e) {}
+        try { const aa = await safeLoad("activeAssets"); if (aa) setActiveAssets(parse(aa)); } catch (e) {}
       } catch (e) {}
       setLoaded(true);
     };
@@ -198,6 +200,11 @@ export default function App() {
   const saveStrategies = async (newSt) => {
     setStrategies(newSt);
     try { await saveData("strategies", JSON.stringify(newSt)); } catch (e) {}
+  };
+
+  const saveActiveAssets = async (newAA) => {
+    setActiveAssets(newAA);
+    try { await saveData("activeAssets", JSON.stringify(newAA)); } catch (e) {}
   };
 
   const saveCapitals = async () => {
@@ -368,7 +375,7 @@ export default function App() {
               <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><Wallet size={16} color={s.accent} /> 계좌별 원금 설정</div>
               <div style={{ fontSize: 12, color: s.muted, marginBottom: 20 }}>각 계좌의 시작 원금을 입력하세요.</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {ACCOUNT_LIST.map(a => {
+                {ACCOUNT_LIST.filter(a => !activeAssets || activeAssets.includes(a.key)).map(a => {
                   const draft = capDrafts[a.key] || { amount: "", currency: a.currencies[0] };
                   const cur = draft.currency || a.currencies[0];
                   return (
@@ -398,12 +405,12 @@ export default function App() {
         )}
 
         <div className="main-content">
-          {tab === "dashboard" && <DashboardTab trades={trades} setModal={setModal} capitals={capitals} totalCapital={totalCapital} pnlByCurrency={pnlByCurrency} onSetCapital={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} />}
-          {tab === "record" && <RecordTab onAdd={addTrade} strategies={strategies} />}
-          {tab === "history" && <HistoryTab trades={trades} onDelete={deleteTrade} onEdit={editTrade} setModal={setModal} />}
-          {tab === "cashflow" && <CashflowTab cashflows={cashflows} trades={trades} onAdd={addCashflow} onDelete={deleteCashflow} />}
+          {tab === "dashboard" && <DashboardTab trades={trades} setModal={setModal} capitals={capitals} totalCapital={totalCapital} pnlByCurrency={pnlByCurrency} activeAssets={activeAssets} onSetCapital={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} />}
+          {tab === "record" && <RecordTab onAdd={addTrade} strategies={strategies} activeAssets={activeAssets} />}
+          {tab === "history" && <HistoryTab trades={trades} onDelete={deleteTrade} onEdit={editTrade} setModal={setModal} activeAssets={activeAssets} />}
+          {tab === "cashflow" && <CashflowTab cashflows={cashflows} trades={trades} onAdd={addCashflow} onDelete={deleteCashflow} activeAssets={activeAssets} />}
           {tab === "ai" && <AITab trades={trades} />}
-          {tab === "settings" && <SettingsTab trades={trades} capitals={capitals} strategies={strategies} onSaveStrategies={saveStrategies} onExportJSON={exportJSON} onExportCSV={exportCSV} onImport={() => importRef.current.click()} onSetCapital={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} onClearAll={async () => { await saveTrades([]); setCapitals({}); try { await saveData("capitals", "{}"); } catch(e) {} }} />}
+          {tab === "settings" && <SettingsTab trades={trades} capitals={capitals} strategies={strategies} onSaveStrategies={saveStrategies} activeAssets={activeAssets} onSaveActiveAssets={saveActiveAssets} onExportJSON={exportJSON} onExportCSV={exportCSV} onImport={() => importRef.current.click()} onSetCapital={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} onClearAll={async () => { await saveTrades([]); setCapitals({}); try { await saveData("capitals", "{}"); } catch(e) {} }} />}
         </div>
         <input ref={importRef} type="file" accept=".json" onChange={importJSON} style={{ display: "none" }} />
 
@@ -434,7 +441,8 @@ export default function App() {
   );
 }
 
-function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency, onSetCapital }) {
+function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency, activeAssets, onSetCapital }) {
+  const visibleAccounts = ACCOUNT_LIST.filter(a => !activeAssets || activeAssets.includes(a.key));
   const total = trades.length;
   const wins = trades.filter(t => t.pnl > 0).length;
   const losses = total - wins;
@@ -452,8 +460,8 @@ function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency,
   trades.forEach(t => { assetCountMap[t.assetKey] = (assetCountMap[t.assetKey] || 0) + 1; });
   const pieData = Object.entries(assetCountMap).map(([name, value]) => ({ name, value }));
 
-  // 계좌별 손익 집계 (통화별)
-  const accountStats = ACCOUNT_LIST.map(a => {
+  // 계좌별 손익 집계 (통화별) - 활성화된 자산만
+  const accountStats = visibleAccounts.map(a => {
     const acTrades = trades.filter(t => t.assetKey === a.key);
     const acWins = acTrades.filter(t => t.pnl > 0).length;
     const capRaw = capitals[a.key];
@@ -618,12 +626,16 @@ function LegRow({ leg, onChange, onRemove, canRemove, label }) {
   );
 }
 
-function RecordTab({ onAdd, strategies }) {
+function RecordTab({ onAdd, strategies, activeAssets }) {
+  // 활성화된 자산만 필터링
+  const visibleAssets = ASSETS.filter((_, i) => !activeAssets || activeAssets.includes(ASSET_KEYS[i]));
+  const visibleAssetKeys = ASSET_KEYS.filter(k => !activeAssets || activeAssets.includes(k));
+  const defaultAssetIdx = ASSET_KEYS.indexOf(visibleAssetKeys[visibleAssetKeys.length - 1] || ASSET_KEYS[0]);
   const emptyLeg = () => ({ date: todayStr(), time: "", price: "", qty: "" });
   const [entries, setEntries] = useState([emptyLeg()]);
   const [exits, setExits] = useState([]);
   const [meta, setMeta] = useState({
-    assetIdx: 3, symbol: "", dir: "롱", lev: "1", sl: "", tp: "",
+    assetIdx: defaultAssetIdx, symbol: "", dir: "롱", lev: "1", sl: "", tp: "",
     risk: 5, emotion: "", memo: "", currency: "₩",
     entryZone: "", slType: "", slHit: "", stophunt: ""
   });
@@ -800,7 +812,7 @@ function RecordTab({ onAdd, strategies }) {
               </div>
             </FormField>
           </div>
-          <FormField label="자산 유형"><select value={meta.assetIdx} onChange={e => setM("assetIdx", parseInt(e.target.value))}>{ASSETS.map((a, i) => <option key={i} value={i}>{a}</option>)}</select></FormField>
+          <FormField label="자산 유형"><select value={meta.assetIdx} onChange={e => setM("assetIdx", parseInt(e.target.value))}>{visibleAssets.map((a, i) => { const realIdx = ASSET_KEYS.indexOf(visibleAssetKeys[i]); return <option key={realIdx} value={realIdx}>{a}</option>; })}</select></FormField>
           <FormField label="종목명"><input placeholder="예: 삼성전자, AAPL, BTC/USDT" value={meta.symbol} onChange={e => setM("symbol", e.target.value)} /></FormField>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             {isFutures && <FormField label="레버리지"><input type="number" placeholder="1" min="1" value={meta.lev} onChange={e => setM("lev", e.target.value)} /></FormField>}
@@ -894,7 +906,8 @@ function RecordTab({ onAdd, strategies }) {
   );
 }
 
-function HistoryTab({ trades, onDelete, onEdit, setModal }) {
+function HistoryTab({ trades, onDelete, onEdit, setModal, activeAssets }) {
+  const visibleAssetKeys = ASSET_KEYS.filter(k => !activeAssets || activeAssets.includes(k));
   const [filter, setFilter] = useState({ asset: "", dir: "", result: "", symbol: "" });
   const [confirmId, setConfirmId] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
@@ -951,7 +964,7 @@ function HistoryTab({ trades, onDelete, onEdit, setModal }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, animation: "fadeIn 0.3s ease" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <select value={filter.asset} onChange={e => set("asset", e.target.value)}><option value="">전체 자산</option>{ASSET_KEYS.map(k => <option key={k} value={k}>{k}</option>)}</select>
+        <select value={filter.asset} onChange={e => set("asset", e.target.value)}><option value="">전체 자산</option>{visibleAssetKeys.map(k => <option key={k} value={k}>{k}</option>)}</select>
         <select value={filter.dir} onChange={e => set("dir", e.target.value)}><option value="">전체 방향</option><option value="롱">롱</option><option value="숏">숏</option></select>
         <select value={filter.result} onChange={e => set("result", e.target.value)}><option value="">전체 결과</option><option value="win">수익</option><option value="loss">손실</option></select>
         <input placeholder="종목 검색..." value={filter.symbol} onChange={e => set("symbol", e.target.value)} />
@@ -1684,7 +1697,7 @@ function TradeDetail({ t, onEdit }) {
 }
 
 // ── Settings Tab ──────────────────────────────────────────────────────
-function SettingsTab({ trades, capitals, strategies, onSaveStrategies, onExportJSON, onExportCSV, onImport, onSetCapital, onClearAll }) {
+function SettingsTab({ trades, capitals, strategies, onSaveStrategies, activeAssets, onSaveActiveAssets, onExportJSON, onExportCSV, onImport, onSetCapital, onClearAll }) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [newEntryZone, setNewEntryZone] = useState("");
   const [newSlType, setNewSlType] = useState("");
@@ -1692,6 +1705,16 @@ function SettingsTab({ trades, capitals, strategies, onSaveStrategies, onExportJ
     const cap = typeof v === "object" ? v : { amount: v, currency: "₩" };
     return cap.currency === "₩" ? a + cap.amount : a;
   }, 0);
+
+  const toggleAsset = (key) => {
+    const cur = activeAssets || ASSET_KEYS;
+    if (cur.includes(key)) {
+      if (cur.length <= 1) return; // 최소 1개는 켜져 있어야
+      onSaveActiveAssets(cur.filter(k => k !== key));
+    } else {
+      onSaveActiveAssets([...cur, key]);
+    }
+  };
 
   const addEntryZone = () => {
     if (!newEntryZone.trim()) return;
@@ -1725,6 +1748,30 @@ function SettingsTab({ trades, capitals, strategies, onSaveStrategies, onExportJ
             <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 22, fontWeight: 700, color: s.accent }}>{totalCapital > 0 ? (totalCapital / 10000).toFixed(0) + "만" : "-"}</div>
             <div style={{ fontSize: 11, color: s.muted, marginTop: 4 }}>총 원금(₩)</div>
           </div>
+        </div>
+      </Card>
+
+      {/* 사용 자산 설정 */}
+      <Card accent={s.accent}>
+        <div style={{ fontSize: 11, color: s.accent, fontWeight: 700, marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}><Shield size={13} /> 사용 자산 설정</div>
+        <div style={{ fontSize: 12, color: s.muted, marginBottom: 14 }}>본인이 거래하는 자산만 켜두면 기록 화면이 간결해져요.</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {ACCOUNT_LIST.map(a => {
+            const isOn = !activeAssets || activeAssets.includes(a.key);
+            return (
+              <div key={a.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: s.surface2, borderRadius: 10, border: "1px solid " + (isOn ? s.accent + "44" : s.border) }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 18 }}>{a.icon}</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: isOn ? s.text : s.muted }}>{a.label}</div>
+                  </div>
+                </div>
+                <button onClick={() => toggleAsset(a.key)} style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", background: isOn ? s.accent : s.border, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: isOn ? 23 : 3, transition: "left 0.2s" }} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       </Card>
 
@@ -1801,7 +1848,7 @@ function SettingsTab({ trades, capitals, strategies, onSaveStrategies, onExportJ
       <Card>
         <div style={{ fontSize: 11, color: s.muted, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}><Wallet size={13} /> 계좌 원금 설정</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          {ACCOUNT_LIST.map(a => {
+          {ACCOUNT_LIST.filter(a => !activeAssets || activeAssets.includes(a.key)).map(a => {
             const capRaw = capitals[a.key];
             const capInfo = capRaw ? (typeof capRaw === "object" ? capRaw : { amount: capRaw, currency: "₩" }) : null;
             return (
@@ -1842,9 +1889,11 @@ function SettingsTab({ trades, capitals, strategies, onSaveStrategies, onExportJ
 }
 
 // ── Cashflow Tab ──────────────────────────────────────────────────────
-function CashflowTab({ cashflows, trades, onAdd, onDelete }) {
+function CashflowTab({ cashflows, trades, onAdd, onDelete, activeAssets }) {
+  const visibleAccounts = ACCOUNT_LIST.filter(a => !activeAssets || activeAssets.includes(a.key));
+  const defaultAccount = visibleAccounts[visibleAccounts.length - 1]?.key || ACCOUNT_LIST[0].key;
   const [form, setForm] = useState({
-    date: todayStr(), type: "입금", accountKey: "암호화폐(선물)",
+    date: todayStr(), type: "입금", accountKey: defaultAccount,
     amount: "", currency: "₩", memo: "", isProfit: false
   });
   const [confirmId, setConfirmId] = useState(null);
@@ -1862,7 +1911,7 @@ function CashflowTab({ cashflows, trades, onAdd, onDelete }) {
   };
 
   // 계좌별 집계
-  const accountStats = ACCOUNT_LIST.map(a => {
+  const accountStats = visibleAccounts.map(a => {
     const aFlows = cashflows.filter(cf => cf.accountKey === a.key);
     const aTrades = trades.filter(t => t.assetKey === a.key);
 
@@ -1917,7 +1966,7 @@ function CashflowTab({ cashflows, trades, onAdd, onDelete }) {
           </FormField>
           <FormField label="계좌">
             <select value={form.accountKey} onChange={e => set("accountKey", e.target.value)}>
-              {ACCOUNT_LIST.map(a => <option key={a.key} value={a.key}>{a.icon} {a.label}</option>)}
+              {visibleAccounts.map(a => <option key={a.key} value={a.key}>{a.icon} {a.label}</option>)}
             </select>
           </FormField>
           <FormField label="금액">
