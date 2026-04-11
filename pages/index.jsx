@@ -423,21 +423,21 @@ export default function App() {
             </button>
           ))}
         </div>
-
-        {/* 모달 */}
-        {modal && (
-          <div onClick={() => setModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: s.surface, borderRadius: 16, border: "1px solid " + s.border, padding: 24, width: "100%", maxWidth: 560, maxHeight: "80vh", overflowY: "auto" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <div style={{ fontWeight: 700, fontSize: 16 }}>{modal.title}</div>
-                <button onClick={() => setModal(null)} style={{ background: s.surface2, border: "1px solid " + s.border, color: s.text, width: 32, height: 32, borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
-              </div>
-              {modal.content}
-            </div>
-          </div>
-        )}
       </div>
     </div>
+
+    {/* 모달 - App 최상단에 렌더링 (PC 스택 컨텍스트 문제 방지) */}
+    {modal && (
+      <div onClick={() => setModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div onClick={e => e.stopPropagation()} style={{ background: s.surface, borderRadius: 16, border: "1px solid " + s.border, padding: 24, width: "100%", maxWidth: 560, maxHeight: "80vh", overflowY: "auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{modal.title}</div>
+            <button onClick={() => setModal(null)} style={{ background: s.surface2, border: "1px solid " + s.border, color: s.text, width: 32, height: 32, borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
+          </div>
+          {modal.content}
+        </div>
+      </div>
+    )}
   );
 }
 
@@ -1585,8 +1585,8 @@ function LegItem({ leg, type, idx, color, editingLeg, setEditingLeg, confirmLeg,
           <FormField label="수량"><input type="number" value={editingLeg.qty} onChange={e => setEditingLeg(l => ({ ...l, qty: e.target.value }))} /></FormField>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onSave} style={{ flex: 1, padding: "8px 0", background: color, border: "none", borderRadius: 6, color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>저장</button>
-          <button onClick={() => setEditingLeg(null)} style={{ flex: 1, padding: "8px 0", background: s.surface2, border: "1px solid " + s.border, borderRadius: 6, color: s.muted, fontSize: 13, cursor: "pointer" }}>취소</button>
+          <button onClick={e => { e.stopPropagation(); onSave(); }} style={{ flex: 1, padding: "8px 0", background: color, border: "none", borderRadius: 6, color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>저장</button>
+          <button onClick={e => { e.stopPropagation(); setEditingLeg(null); }} style={{ flex: 1, padding: "8px 0", background: s.surface2, border: "1px solid " + s.border, borderRadius: 6, color: s.muted, fontSize: 13, cursor: "pointer" }}>취소</button>
         </div>
       </div>
     );
@@ -1600,13 +1600,13 @@ function LegItem({ leg, type, idx, color, editingLeg, setEditingLeg, confirmLeg,
       </div>
       {isConfirm ? (
         <div style={{ display: "flex", gap: 4 }}>
-          <button onClick={() => onDelete(type, idx)} style={{ padding: "4px 8px", background: s.red, border: "none", color: "#fff", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>삭제</button>
-          <button onClick={() => setConfirmLeg(null)} style={{ padding: "4px 8px", background: s.surface, border: "1px solid " + s.border, color: s.muted, borderRadius: 4, fontSize: 11, cursor: "pointer" }}>취소</button>
+          <button onClick={e => { e.stopPropagation(); onDelete(type, idx); }} style={{ padding: "4px 8px", background: s.red, border: "none", color: "#fff", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>삭제</button>
+          <button onClick={e => { e.stopPropagation(); setConfirmLeg(null); }} style={{ padding: "4px 8px", background: s.surface, border: "1px solid " + s.border, color: s.muted, borderRadius: 4, fontSize: 11, cursor: "pointer" }}>취소</button>
         </div>
       ) : (
         <div style={{ display: "flex", gap: 4 }}>
-          <button onClick={() => setEditingLeg({ type, idx, date: leg.date, time: leg.time || "", price: String(leg.price || ""), qty: String(leg.qty || "") })} style={{ width: 26, height: 26, background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: s.accent, borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><PenLine size={11} /></button>
-          <button onClick={() => setConfirmLeg({ type, idx })} style={{ width: 26, height: 26, background: "rgba(255,61,113,0.1)", border: "1px solid rgba(255,61,113,0.3)", color: s.red, borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={11} /></button>
+          <button onClick={e => { e.stopPropagation(); setEditingLeg({ type, idx, date: leg.date, time: leg.time || "", price: String(leg.price || ""), qty: String(leg.qty || "") }); }} style={{ width: 26, height: 26, background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: s.accent, borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><PenLine size={11} /></button>
+          <button onClick={e => { e.stopPropagation(); setConfirmLeg({ type, idx }); }} style={{ width: 26, height: 26, background: "rgba(255,61,113,0.1)", border: "1px solid rgba(255,61,113,0.3)", color: s.red, borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={11} /></button>
         </div>
       )}
     </div>
