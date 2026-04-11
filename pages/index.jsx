@@ -964,7 +964,7 @@ function HistoryTab({ trades, onDelete, onEdit, setModal }) {
             {filtered.map(t => (
               <Card key={t.id} style={{ padding: 12 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  <div style={{ flex: 1 }} onClick={() => setModal({ title: t.symbol, content: <TradeDetail t={t} /> })}>
+                  <div style={{ flex: 1 }} onClick={() => setModal({ title: t.symbol, content: <TradeDetail t={t} onEdit={(updated) => { onEdit(updated); setModal(null); }} /> })}>
                     <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
                       <span style={{ fontWeight: 700, fontSize: 15 }}>{t.symbol}</span>
                       <Badge type={t.dir} />
@@ -1543,10 +1543,87 @@ function SingleFeedbackRow({ t, loading, onRequest }) {
   );
 }
 
-function TradeDetail({ t }) {
+function TradeDetail({ t, onEdit }) {
   const cur = t.currency || "₩";
   const hasMulti = t.entries && t.entries.length > 0;
   const invested = t.entry * (t.qty || 0);
+  const [editingLeg, setEditingLeg] = useState(null); // { type: "entry"|"exit", idx, ...leg }
+  const [confirmLeg, setConfirmLeg] = useState(null); // { type, idx }
+
+  const recalc = (entries, exits, dir, lev) => {
+    const totalEQty = entries.reduce((a, e) => a + (e.qty || 0), 0);
+    const avgEntry = totalEQty > 0 ? entries.reduce((a, e) => a + (e.price || 0) * (e.qty || 0), 0) / totalEQty : 0;
+    const totalXQty = exits.reduce((a, e) => a + (e.qty || 0), 0);
+    const avgExit = totalXQty > 0 ? exits.reduce((a, e) => a + (e.price || 0) * (e.qty || 0), 0) / totalXQty : 0;
+    const closedQty = Math.min(totalEQty, totalXQty);
+    const pnl = avgEntry > 0 && avgExit > 0 && closedQty > 0
+      ? Math.round(((dir === "숏" ? (avgEntry - avgExit) : (avgExit - avgEntry)) * closedQty * (lev || 1)) * 100) / 100 : 0;
+    const pct = avgEntry > 0 && avgExit > 0
+      ? Math.round(((dir === "숏" ? (avgEntry - avgExit) : (avgExit - avgEntry)) / avgEntry * 100 * (lev || 1)) * 100) / 100 : 0;
+    const isFullyClosed = totalXQty >= totalEQty && totalEQty > 0;
+    const isPartial = totalXQty > 0 && totalXQty < totalEQty;
+    return { entries, exits, entry: Math.round(avgEntry * 100) / 100, exit: (isFullyClosed || isPartial) ? Math.round(avgExit * 100) / 100 : null, qty: totalEQty, pnl, pct, status: isFullyClosed ? "청산" : isPartial ? "부분청산" : "홀딩" };
+  };
+
+  const handleDeleteLeg = (type, idx) => {
+    const entries = [...(t.entries || [])];
+    const exits = [...(t.exits || [])];
+    if (type === "entry") entries.splice(idx, 1);
+    else exits.splice(idx, 1);
+    onEdit({ ...t, ...recalc(entries, exits, t.dir, t.lev) });
+    setConfirmLeg(null);
+  };
+
+  const handleSaveLeg = () => {
+    if (!editingLeg) return;
+    const entries = (t.entries || []).map((e, i) => editingLeg.type === "entry" && i === editingLeg.idx ? { date: editingLeg.date, time: editingLeg.time, price: parseFloat(editingLeg.price) || 0, qty: parseFloat(editingLeg.qty) || 0 } : e);
+    const exits = (t.exits || []).map((e, i) => editingLeg.type === "exit" && i === editingLeg.idx ? { date: editingLeg.date, time: editingLeg.time, price: parseFloat(editingLeg.price) || 0, qty: parseFloat(editingLeg.qty) || 0 } : e);
+    onEdit({ ...t, ...recalc(entries, exits, t.dir, t.lev) });
+    setEditingLeg(null);
+  };
+
+  const LegItem = ({ leg, type, idx, color }) => {
+    const isEditing = editingLeg?.type === type && editingLeg?.idx === idx;
+    const isConfirm = confirmLeg?.type === type && confirmLeg?.idx === idx;
+
+    if (isEditing) {
+      return (
+        <div style={{ padding: "10px 12px", background: s.surface, border: "1px solid " + color + "44", borderRadius: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 1fr 1fr", gap: 8, marginBottom: 8 }}>
+            <FormField label="날짜"><input type="date" value={editingLeg.date} onChange={e => setEditingLeg(l => ({ ...l, date: e.target.value }))} /></FormField>
+            <FormField label="시간"><input type="text" placeholder="09:30" value={editingLeg.time} onChange={e => setEditingLeg(l => ({ ...l, time: e.target.value }))} /></FormField>
+            <FormField label="가격"><input type="number" value={editingLeg.price} onChange={e => setEditingLeg(l => ({ ...l, price: e.target.value }))} /></FormField>
+            <FormField label="수량"><input type="number" value={editingLeg.qty} onChange={e => setEditingLeg(l => ({ ...l, qty: e.target.value }))} /></FormField>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={handleSaveLeg} style={{ flex: 1, padding: "8px 0", background: color, border: "none", borderRadius: 6, color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>저장</button>
+            <button onClick={() => setEditingLeg(null)} style={{ flex: 1, padding: "8px 0", background: s.surface2, border: "1px solid " + s.border, borderRadius: 6, color: s.muted, fontSize: 13, cursor: "pointer" }}>취소</button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: s.surface2, borderRadius: 6 }}>
+        <div style={{ flex: 1 }}>
+          <span style={{ fontSize: 12, color: s.muted }}>{leg.date}{leg.time ? " " + leg.time : ""}</span>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, marginLeft: 12 }}>{(leg.price || 0).toLocaleString()} × {leg.qty}</span>
+        </div>
+        {isConfirm ? (
+          <div style={{ display: "flex", gap: 4 }}>
+            <button onClick={() => handleDeleteLeg(type, idx)} style={{ padding: "4px 8px", background: s.red, border: "none", color: "#fff", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>삭제</button>
+            <button onClick={() => setConfirmLeg(null)} style={{ padding: "4px 8px", background: s.surface, border: "1px solid " + s.border, color: s.muted, borderRadius: 4, fontSize: 11, cursor: "pointer" }}>취소</button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 4 }}>
+            <button onClick={() => setEditingLeg({ type, idx, date: leg.date, time: leg.time || "", price: String(leg.price || ""), qty: String(leg.qty || "") })} style={{ width: 26, height: 26, background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: s.accent, borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><PenLine size={11} /></button>
+            <button onClick={() => setConfirmLeg({ type, idx })} style={{ width: 26, height: 26, background: "rgba(255,61,113,0.1)", border: "1px solid rgba(255,61,113,0.3)", color: s.red, borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={11} /></button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -1562,13 +1639,8 @@ function TradeDetail({ t }) {
       {hasMulti && t.entries.length > 0 && (
         <div>
           <div style={{ fontSize: 11, color: s.green, fontWeight: 700, marginBottom: 8 }}>진입 내역</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {t.entries.map((e, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: s.surface2, borderRadius: 6, fontSize: 12 }}>
-                <span style={{ color: s.muted }}>{e.date}{e.time ? " " + e.time : ""}</span>
-                <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>{(e.price || 0).toLocaleString()} × {e.qty}</span>
-              </div>
-            ))}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {t.entries.map((e, i) => <LegItem key={i} leg={e} type="entry" idx={i} color={s.green} />)}
             <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 12px", fontSize: 11, color: s.muted }}>
               <span>평균 진입가</span>
               <span style={{ fontFamily: "'JetBrains Mono',monospace", color: s.text, fontWeight: 700 }}>{(t.entry || 0).toLocaleString()}</span>
@@ -1581,13 +1653,8 @@ function TradeDetail({ t }) {
       {hasMulti && t.exits && t.exits.length > 0 && (
         <div>
           <div style={{ fontSize: 11, color: s.red, fontWeight: 700, marginBottom: 8 }}>청산 내역</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {t.exits.map((e, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: s.surface2, borderRadius: 6, fontSize: 12 }}>
-                <span style={{ color: s.muted }}>{e.date}{e.time ? " " + e.time : ""}</span>
-                <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>{(e.price || 0).toLocaleString()} × {e.qty}</span>
-              </div>
-            ))}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {t.exits.map((e, i) => <LegItem key={i} leg={e} type="exit" idx={i} color={s.red} />)}
             {t.exit && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 12px", fontSize: 11, color: s.muted }}>
               <span>평균 청산가</span>
               <span style={{ fontFamily: "'JetBrains Mono',monospace", color: s.text, fontWeight: 700 }}>{(t.exit || 0).toLocaleString()}</span>
@@ -1596,7 +1663,7 @@ function TradeDetail({ t }) {
         </div>
       )}
 
-      {/* 기존 단순 거래 표시 */}
+      {/* 기존 단순 거래 */}
       {!hasMulti && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div><div style={{ fontSize: 11, color: s.muted, marginBottom: 3 }}>진입가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13 }}>{t.entry?.toLocaleString()} {cur}</div></div>
