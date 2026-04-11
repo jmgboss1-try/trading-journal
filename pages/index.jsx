@@ -311,8 +311,6 @@ export default function App() {
   return (
     <div className="app-root" style={{ background: s.bg, minHeight: "100vh", color: s.text, fontFamily: "'Noto Sans KR', sans-serif", display: "flex" }}>
       <style>{css}</style>
-
-      {/* PC 사이드바 */}
       <div className="sidebar">
         <div style={{ padding: "0 20px 24px", borderBottom: "1px solid " + s.border, marginBottom: 8 }}>
           <div style={{ fontSize: 20, fontWeight: 700, color: s.text, marginBottom: 16 }}>매매일지</div>
@@ -424,20 +422,20 @@ export default function App() {
           ))}
         </div>
       </div>
-    </div>
 
-    {/* 모달 - App 최상단에 렌더링 (PC 스택 컨텍스트 문제 방지) */}
-    {modal && (
-      <div onClick={() => setModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div onClick={e => e.stopPropagation()} style={{ background: s.surface, borderRadius: 16, border: "1px solid " + s.border, padding: 24, width: "100%", maxWidth: 560, maxHeight: "80vh", overflowY: "auto" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{modal.title}</div>
-            <button onClick={() => setModal(null)} style={{ background: s.surface2, border: "1px solid " + s.border, color: s.text, width: 32, height: 32, borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
+      {/* 모달 */}
+      {modal && (
+        <div onClick={() => setModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: s.surface, borderRadius: 16, border: "1px solid " + s.border, padding: 24, width: "100%", maxWidth: 560, maxHeight: "80vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>{modal.title}</div>
+              <button onClick={() => setModal(null)} style={{ background: s.surface2, border: "1px solid " + s.border, color: s.text, width: 32, height: 32, borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
+            </div>
+            {modal.content}
           </div>
-          {modal.content}
         </div>
-      </div>
-    )}
+      )}
+    </div>
   );
 }
 
