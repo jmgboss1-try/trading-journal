@@ -650,6 +650,7 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
   const setM = (k, v) => setMeta(f => ({ ...f, [k]: v }));
   const isFutures = ASSET_KEYS[meta.assetIdx] === "암호화폐(선물)";
   const lev = isFutures ? (parseFloat(meta.lev) || 1) : 1;
+  const [showSlTp, setShowSlTp] = useState(false);
 
   // 평균 진입가 / 총 진입수량
   const totalEntryQty = entries.reduce((a, e) => a + (parseFloat(e.qty) || 0), 0);
@@ -800,25 +801,38 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
       {/* 기본 정보 */}
       <Card>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {/* 방향 - 선물만 표시 */}
+          {isFutures && (
             <FormField label="방향">
               <div style={{ display: "flex", gap: 8 }}>
                 {["롱", "숏"].map(d => <button key={d} onClick={() => setM("dir", d)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 13, fontFamily: "'Noto Sans KR', sans-serif", background: meta.dir === d ? (d === "롱" ? s.green : s.red) : s.surface2, color: meta.dir === d ? "#000" : s.muted, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{d === "롱" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}{d}</button>)}
               </div>
             </FormField>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: isFutures ? "1fr 1fr" : "1fr", gap: 12 }}>
             <FormField label="통화">
               <div style={{ display: "flex", gap: 6 }}>
                 {CURRENCIES.map(c => <button key={c} onClick={() => setM("currency", c)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", background: meta.currency === c ? s.accent : s.surface2, color: meta.currency === c ? "#000" : s.muted }}>{c}</button>)}
               </div>
             </FormField>
+            {/* 레버리지 - 선물만 */}
+            {isFutures && <FormField label="레버리지"><input type="number" placeholder="1" min="1" value={meta.lev} onChange={e => setM("lev", e.target.value)} /></FormField>}
           </div>
           <FormField label="자산 유형"><select value={meta.assetIdx} onChange={e => setM("assetIdx", parseInt(e.target.value))}>{visibleAssets.map((a, i) => { const realIdx = ASSET_KEYS.indexOf(visibleAssetKeys[i]); return <option key={realIdx} value={realIdx}>{a}</option>; })}</select></FormField>
           <FormField label="종목명"><input placeholder="예: 삼성전자, AAPL, BTC/USDT" value={meta.symbol} onChange={e => setM("symbol", e.target.value)} /></FormField>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            {isFutures && <FormField label="레버리지"><input type="number" placeholder="1" min="1" value={meta.lev} onChange={e => setM("lev", e.target.value)} /></FormField>}
-            <FormField label="손절가 (선택)"><input type="number" placeholder="0" value={meta.sl} onChange={e => setM("sl", e.target.value)} /></FormField>
-            <FormField label="목표가 (선택)"><input type="number" placeholder="0" value={meta.tp} onChange={e => setM("tp", e.target.value)} /></FormField>
-          </div>
+
+          {/* 손절가/목표가 토글 */}
+          <button onClick={() => setShowSlTp(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "1px dashed " + s.border, borderRadius: 8, color: s.muted, padding: "8px 14px", cursor: "pointer", fontSize: 12, width: "fit-content" }}>
+            <span>{showSlTp ? "▲" : "▼"}</span>
+            {showSlTp ? "손절가/목표가 닫기" : "손절가/목표가 입력"}
+          </button>
+          {showSlTp && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <FormField label="손절가"><input type="number" placeholder="0" value={meta.sl} onChange={e => setM("sl", e.target.value)} /></FormField>
+              <FormField label="목표가"><input type="number" placeholder="0" value={meta.tp} onChange={e => setM("tp", e.target.value)} /></FormField>
+            </div>
+          )}
+
           <FormField label={"리스크 체감: " + meta.risk + "/10"}>
             <input type="range" min="1" max="10" value={meta.risk} onChange={e => setM("risk", parseInt(e.target.value))} style={{ background: "linear-gradient(90deg, " + s.accent + " " + (meta.risk * 10) + "%, " + s.border + " " + (meta.risk * 10) + "%)" }} />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: s.muted, marginTop: 2 }}><span>낮음</span><span>높음</span></div>
@@ -1556,12 +1570,55 @@ function SingleFeedbackRow({ t, loading, onRequest }) {
   );
 }
 
+// LegItem 컴포넌트 - TradeDetail 밖에 정의해야 커서 안 날아감
+function LegItem({ leg, type, idx, color, editingLeg, setEditingLeg, confirmLeg, setConfirmLeg, onSave, onDelete }) {
+  const isEditing = editingLeg?.type === type && editingLeg?.idx === idx;
+  const isConfirm = confirmLeg?.type === type && confirmLeg?.idx === idx;
+
+  if (isEditing) {
+    return (
+      <div style={{ padding: "10px 12px", background: s.surface, border: "1px solid " + color + "44", borderRadius: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 1fr 1fr", gap: 8, marginBottom: 8 }}>
+          <FormField label="날짜"><input type="date" value={editingLeg.date} onChange={e => setEditingLeg(l => ({ ...l, date: e.target.value }))} /></FormField>
+          <FormField label="시간"><input type="text" placeholder="09:30" value={editingLeg.time} onChange={e => setEditingLeg(l => ({ ...l, time: e.target.value }))} /></FormField>
+          <FormField label="가격"><input type="number" value={editingLeg.price} onChange={e => setEditingLeg(l => ({ ...l, price: e.target.value }))} /></FormField>
+          <FormField label="수량"><input type="number" value={editingLeg.qty} onChange={e => setEditingLeg(l => ({ ...l, qty: e.target.value }))} /></FormField>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onSave} style={{ flex: 1, padding: "8px 0", background: color, border: "none", borderRadius: 6, color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>저장</button>
+          <button onClick={() => setEditingLeg(null)} style={{ flex: 1, padding: "8px 0", background: s.surface2, border: "1px solid " + s.border, borderRadius: 6, color: s.muted, fontSize: 13, cursor: "pointer" }}>취소</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: s.surface2, borderRadius: 6 }}>
+      <div style={{ flex: 1 }}>
+        <span style={{ fontSize: 12, color: s.muted }}>{leg.date}{leg.time ? " " + leg.time : ""}</span>
+        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, marginLeft: 12 }}>{(leg.price || 0).toLocaleString()} × {leg.qty}</span>
+      </div>
+      {isConfirm ? (
+        <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => onDelete(type, idx)} style={{ padding: "4px 8px", background: s.red, border: "none", color: "#fff", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>삭제</button>
+          <button onClick={() => setConfirmLeg(null)} style={{ padding: "4px 8px", background: s.surface, border: "1px solid " + s.border, color: s.muted, borderRadius: 4, fontSize: 11, cursor: "pointer" }}>취소</button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => setEditingLeg({ type, idx, date: leg.date, time: leg.time || "", price: String(leg.price || ""), qty: String(leg.qty || "") })} style={{ width: 26, height: 26, background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: s.accent, borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><PenLine size={11} /></button>
+          <button onClick={() => setConfirmLeg({ type, idx })} style={{ width: 26, height: 26, background: "rgba(255,61,113,0.1)", border: "1px solid rgba(255,61,113,0.3)", color: s.red, borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={11} /></button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TradeDetail({ t, onEdit }) {
   const cur = t.currency || "₩";
   const hasMulti = t.entries && t.entries.length > 0;
   const invested = t.entry * (t.qty || 0);
-  const [editingLeg, setEditingLeg] = useState(null); // { type: "entry"|"exit", idx, ...leg }
-  const [confirmLeg, setConfirmLeg] = useState(null); // { type, idx }
+  const [editingLeg, setEditingLeg] = useState(null);
+  const [confirmLeg, setConfirmLeg] = useState(null);
 
   const recalc = (entries, exits, dir, lev) => {
     const totalEQty = entries.reduce((a, e) => a + (e.qty || 0), 0);
@@ -1595,48 +1652,6 @@ function TradeDetail({ t, onEdit }) {
     setEditingLeg(null);
   };
 
-  const LegItem = ({ leg, type, idx, color }) => {
-    const isEditing = editingLeg?.type === type && editingLeg?.idx === idx;
-    const isConfirm = confirmLeg?.type === type && confirmLeg?.idx === idx;
-
-    if (isEditing) {
-      return (
-        <div style={{ padding: "10px 12px", background: s.surface, border: "1px solid " + color + "44", borderRadius: 8 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 1fr 1fr", gap: 8, marginBottom: 8 }}>
-            <FormField label="날짜"><input type="date" value={editingLeg.date} onChange={e => setEditingLeg(l => ({ ...l, date: e.target.value }))} /></FormField>
-            <FormField label="시간"><input type="text" placeholder="09:30" value={editingLeg.time} onChange={e => setEditingLeg(l => ({ ...l, time: e.target.value }))} /></FormField>
-            <FormField label="가격"><input type="number" value={editingLeg.price} onChange={e => setEditingLeg(l => ({ ...l, price: e.target.value }))} /></FormField>
-            <FormField label="수량"><input type="number" value={editingLeg.qty} onChange={e => setEditingLeg(l => ({ ...l, qty: e.target.value }))} /></FormField>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={handleSaveLeg} style={{ flex: 1, padding: "8px 0", background: color, border: "none", borderRadius: 6, color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>저장</button>
-            <button onClick={() => setEditingLeg(null)} style={{ flex: 1, padding: "8px 0", background: s.surface2, border: "1px solid " + s.border, borderRadius: 6, color: s.muted, fontSize: 13, cursor: "pointer" }}>취소</button>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: s.surface2, borderRadius: 6 }}>
-        <div style={{ flex: 1 }}>
-          <span style={{ fontSize: 12, color: s.muted }}>{leg.date}{leg.time ? " " + leg.time : ""}</span>
-          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, marginLeft: 12 }}>{(leg.price || 0).toLocaleString()} × {leg.qty}</span>
-        </div>
-        {isConfirm ? (
-          <div style={{ display: "flex", gap: 4 }}>
-            <button onClick={() => handleDeleteLeg(type, idx)} style={{ padding: "4px 8px", background: s.red, border: "none", color: "#fff", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>삭제</button>
-            <button onClick={() => setConfirmLeg(null)} style={{ padding: "4px 8px", background: s.surface, border: "1px solid " + s.border, color: s.muted, borderRadius: 4, fontSize: 11, cursor: "pointer" }}>취소</button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: 4 }}>
-            <button onClick={() => setEditingLeg({ type, idx, date: leg.date, time: leg.time || "", price: String(leg.price || ""), qty: String(leg.qty || "") })} style={{ width: 26, height: 26, background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: s.accent, borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><PenLine size={11} /></button>
-            <button onClick={() => setConfirmLeg({ type, idx })} style={{ width: 26, height: 26, background: "rgba(255,61,113,0.1)", border: "1px solid rgba(255,61,113,0.3)", color: s.red, borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={11} /></button>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -1653,7 +1668,7 @@ function TradeDetail({ t, onEdit }) {
         <div>
           <div style={{ fontSize: 11, color: s.green, fontWeight: 700, marginBottom: 8 }}>진입 내역</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {t.entries.map((e, i) => <LegItem key={i} leg={e} type="entry" idx={i} color={s.green} />)}
+            {t.entries.map((e, i) => <LegItem key={i} leg={e} type="entry" idx={i} color={s.green} editingLeg={editingLeg} setEditingLeg={setEditingLeg} confirmLeg={confirmLeg} setConfirmLeg={setConfirmLeg} onSave={handleSaveLeg} onDelete={handleDeleteLeg} />)}
             <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 12px", fontSize: 11, color: s.muted }}>
               <span>평균 진입가</span>
               <span style={{ fontFamily: "'JetBrains Mono',monospace", color: s.text, fontWeight: 700 }}>{(t.entry || 0).toLocaleString()}</span>
@@ -1667,7 +1682,7 @@ function TradeDetail({ t, onEdit }) {
         <div>
           <div style={{ fontSize: 11, color: s.red, fontWeight: 700, marginBottom: 8 }}>청산 내역</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {t.exits.map((e, i) => <LegItem key={i} leg={e} type="exit" idx={i} color={s.red} />)}
+            {t.exits.map((e, i) => <LegItem key={i} leg={e} type="exit" idx={i} color={s.red} editingLeg={editingLeg} setEditingLeg={setEditingLeg} confirmLeg={confirmLeg} setConfirmLeg={setConfirmLeg} onSave={handleSaveLeg} onDelete={handleDeleteLeg} />)}
             {t.exit && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 12px", fontSize: 11, color: s.muted }}>
               <span>평균 청산가</span>
               <span style={{ fontFamily: "'JetBrains Mono',monospace", color: s.text, fontWeight: 700 }}>{(t.exit || 0).toLocaleString()}</span>
