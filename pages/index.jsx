@@ -154,6 +154,10 @@ export default function App() {
   const [trades, setTrades] = useState([]);
   const [capitals, setCapitals] = useState({});
   const [cashflows, setCashflows] = useState([]);
+  const [strategies, setStrategies] = useState({
+    entryZones: ["피보 0.786~0.886", "피보 1.13~1.414", "지지/저항", "추세선", "기타"],
+    slTypes: ["피보 0.886 근처", "피보 1.414 근처", "전저점/전고점", "이평선", "기타"]
+  });
   const [showCapInput, setShowCapInput] = useState(false);
   const [capDrafts, setCapDrafts] = useState({});
   const [modal, setModal] = useState(null);
@@ -168,6 +172,7 @@ export default function App() {
         try { const t = await safeLoad("trades"); if (t) setTrades(parse(t)); } catch (e) {}
         try { const c = await safeLoad("capitals"); if (c) setCapitals(parse(c)); } catch (e) {}
         try { const cf = await safeLoad("cashflows"); if (cf) setCashflows(parse(cf)); } catch (e) {}
+        try { const st = await safeLoad("strategies"); if (st) setStrategies(parse(st)); } catch (e) {}
       } catch (e) {}
       setLoaded(true);
     };
@@ -189,6 +194,11 @@ export default function App() {
   };
   const addCashflow = (cf) => saveCashflows([cf, ...cashflows]);
   const deleteCashflow = (id) => saveCashflows(cashflows.filter(cf => cf.id !== id));
+
+  const saveStrategies = async (newSt) => {
+    setStrategies(newSt);
+    try { await saveData("strategies", JSON.stringify(newSt)); } catch (e) {}
+  };
 
   const saveCapitals = async () => {
     const parsed = {};
@@ -389,11 +399,11 @@ export default function App() {
 
         <div className="main-content">
           {tab === "dashboard" && <DashboardTab trades={trades} setModal={setModal} capitals={capitals} totalCapital={totalCapital} pnlByCurrency={pnlByCurrency} onSetCapital={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} />}
-          {tab === "record" && <RecordTab onAdd={addTrade} />}
+          {tab === "record" && <RecordTab onAdd={addTrade} strategies={strategies} />}
           {tab === "history" && <HistoryTab trades={trades} onDelete={deleteTrade} onEdit={editTrade} setModal={setModal} />}
           {tab === "cashflow" && <CashflowTab cashflows={cashflows} trades={trades} onAdd={addCashflow} onDelete={deleteCashflow} />}
           {tab === "ai" && <AITab trades={trades} />}
-          {tab === "settings" && <SettingsTab trades={trades} capitals={capitals} onExportJSON={exportJSON} onExportCSV={exportCSV} onImport={() => importRef.current.click()} onSetCapital={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} onClearAll={async () => { await saveTrades([]); setCapitals({}); try { await saveData("capitals", "{}"); } catch(e) {} }} />}
+          {tab === "settings" && <SettingsTab trades={trades} capitals={capitals} strategies={strategies} onSaveStrategies={saveStrategies} onExportJSON={exportJSON} onExportCSV={exportCSV} onImport={() => importRef.current.click()} onSetCapital={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} onClearAll={async () => { await saveTrades([]); setCapitals({}); try { await saveData("capitals", "{}"); } catch(e) {} }} />}
         </div>
         <input ref={importRef} type="file" accept=".json" onChange={importJSON} style={{ display: "none" }} />
 
@@ -593,8 +603,12 @@ function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency,
   );
 }
 
-function RecordTab({ onAdd }) {
-  const [form, setForm] = useState({ date: todayStr(), assetIdx: 3, symbol: "", dir: "롱", entry: "", exit: "", qty: "", lev: "1", sl: "", tp: "", risk: 5, emotion: "", memo: "", currency: "₩" });
+function RecordTab({ onAdd, strategies }) {
+  const [form, setForm] = useState({
+    date: todayStr(), assetIdx: 3, symbol: "", dir: "롱", entry: "", exit: "", qty: "", lev: "1", sl: "", tp: "", risk: 5, emotion: "", memo: "", currency: "₩",
+    // 백테스팅 전략 필드
+    entryZone: "", slType: "", slHit: "", stophunt: ""
+  });
   const [saved, setSaved] = useState(false);
   const [imgBase64, setImgBase64] = useState(null);
   const [imgMime, setImgMime] = useState("image/jpeg");
@@ -662,11 +676,13 @@ function RecordTab({ onAdd }) {
       currency: form.currency, chartImg: imgBase64 || null,
       status: isOpen ? "홀딩" : "청산",
       pnl: isOpen ? 0 : Math.round(pnl * 100) / 100,
-      pct: isOpen ? 0 : Math.round(pct * 100) / 100
+      pct: isOpen ? 0 : Math.round(pct * 100) / 100,
+      entryZone: form.entryZone, slType: form.slType,
+      slHit: form.slHit, stophunt: form.stophunt
     };
     onAdd(trade); setSaved(true); setImgBase64(null); setImgPreview(null); setScanMsg("");
     setTimeout(() => setSaved(false), 2000);
-    setForm(f => ({ ...f, symbol: "", entry: "", exit: "", qty: "", lev: "1", sl: "", tp: "", risk: 5, emotion: "", memo: "" }));
+    setForm(f => ({ ...f, symbol: "", entry: "", exit: "", qty: "", lev: "1", sl: "", tp: "", risk: 5, emotion: "", memo: "", entryZone: "", slType: "", slHit: "", stophunt: "" }));
   };
 
   return (
@@ -740,6 +756,47 @@ function RecordTab({ onAdd }) {
             </div>
           </FormField>
           <FormField label="진입 근거 / 메모"><textarea placeholder="진입 이유, 시장 상황, 반성 등..." value={form.memo} onChange={e => set("memo", e.target.value)} /></FormField>
+        </div>
+      </Card>
+
+      {/* 백테스팅 전략 섹션 */}
+      <Card accent={s.accent3}>
+        <div style={{ fontSize: 11, color: s.accent3, fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}><Target size={13} /> 백테스팅 전략 기록 (선택)</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+          <FormField label="진입 구간">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {(strategies?.entryZones || []).map(v => (
+                <button key={v} onClick={() => set("entryZone", form.entryZone === v ? "" : v)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (form.entryZone === v ? s.accent3 : s.border), background: form.entryZone === v ? "rgba(255,224,102,0.15)" : "transparent", color: form.entryZone === v ? s.accent3 : s.muted, fontSize: 12, cursor: "pointer", fontWeight: form.entryZone === v ? 700 : 400, fontFamily: "'Noto Sans KR', sans-serif" }}>{v}</button>
+              ))}
+            </div>
+          </FormField>
+
+          <FormField label="손절 유형">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {(strategies?.slTypes || []).map(v => (
+                <button key={v} onClick={() => set("slType", form.slType === v ? "" : v)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (form.slType === v ? s.red : s.border), background: form.slType === v ? "rgba(255,61,113,0.1)" : "transparent", color: form.slType === v ? s.red : s.muted, fontSize: 12, cursor: "pointer", fontWeight: form.slType === v ? 700 : 400, fontFamily: "'Noto Sans KR', sans-serif" }}>{v}</button>
+              ))}
+            </div>
+          </FormField>
+
+          <FormField label="손절 맞았나요?">
+            <div style={{ display: "flex", gap: 8 }}>
+              {[["미청산/홀딩", s.muted], ["손절 안 맞음", s.green], ["손절 맞음", s.red]].map(([v, c]) => (
+                <button key={v} onClick={() => set("slHit", form.slHit === v ? "" : v)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "1px solid " + (form.slHit === v ? c : s.border), background: form.slHit === v ? c + "22" : "transparent", color: form.slHit === v ? c : s.muted, fontSize: 12, cursor: "pointer", fontWeight: form.slHit === v ? 700 : 400, fontFamily: "'Noto Sans KR', sans-serif" }}>{v}</button>
+              ))}
+            </div>
+          </FormField>
+
+          {form.slHit === "손절 맞음" && (
+            <FormField label="손절 후 가격 방향 (스탑헌팅 확인)">
+              <div style={{ display: "flex", gap: 8 }}>
+                {[["원래 방향으로 돌아감 (스탑헌팅)", s.accent3], ["계속 반대 방향 (정상 손절)", s.muted]].map(([v, c]) => (
+                  <button key={v} onClick={() => set("stophunt", form.stophunt === v ? "" : v)} style={{ flex: 1, padding: "8px 6px", borderRadius: 8, border: "1px solid " + (form.stophunt === v ? c : s.border), background: form.stophunt === v ? c + "22" : "transparent", color: form.stophunt === v ? c : s.muted, fontSize: 11, cursor: "pointer", fontWeight: form.stophunt === v ? 700 : 400, fontFamily: "'Noto Sans KR', sans-serif", textAlign: "center" }}>{v}</button>
+                ))}
+              </div>
+            </FormField>
+          )}
         </div>
       </Card>
       <Btn onClick={handleSave} style={{ width: "100%", padding: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Save size={15} />{saved ? "저장완료!" : "기록 저장"}</Btn>
@@ -1020,10 +1077,29 @@ function StatsTab({ trades }) {
   const assetMap = {};
   trades.forEach(t => { if (!assetMap[t.assetKey]) assetMap[t.assetKey] = { trades: [], wins: 0 }; assetMap[t.assetKey].trades.push(t); if (t.pnl > 0) assetMap[t.assetKey].wins++; });
   const avgPct = trades.length ? trades.reduce((a, t) => a + t.pct, 0) / trades.length : 0;
-
-  // 최대 수익/손실 (통화별로 찾기)
   const maxWin = wins.length ? wins.reduce((a, t) => t.pnl > a.pnl ? t : a) : null;
   const maxLoss = losses.length ? losses.reduce((a, t) => t.pnl < a.pnl ? t : a) : null;
+
+  // 백테스팅 통계
+  const btTrades = trades.filter(t => t.slType || t.entryZone);
+
+  // 손절 유형별 통계
+  const slTypeMap = {};
+  trades.filter(t => t.slType).forEach(t => {
+    if (!slTypeMap[t.slType]) slTypeMap[t.slType] = { total: 0, wins: 0, slHit: 0, stophunt: 0 };
+    slTypeMap[t.slType].total++;
+    if (t.pnl > 0) slTypeMap[t.slType].wins++;
+    if (t.slHit === "손절 맞음") slTypeMap[t.slType].slHit++;
+    if (t.stophunt && t.stophunt.includes("스탑헌팅")) slTypeMap[t.slType].stophunt++;
+  });
+
+  // 진입 구간별 통계
+  const ezMap = {};
+  trades.filter(t => t.entryZone).forEach(t => {
+    if (!ezMap[t.entryZone]) ezMap[t.entryZone] = { total: 0, wins: 0 };
+    ezMap[t.entryZone].total++;
+    if (t.pnl > 0) ezMap[t.entryZone].wins++;
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, animation: "fadeIn 0.3s ease" }}>
@@ -1042,7 +1118,6 @@ function StatsTab({ trades }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {Object.entries(assetMap).map(([name, d]) => {
               const wr = Math.round(d.wins / d.trades.length * 100);
-              // 통화별 손익
               const pnlByCur = d.trades.reduce((acc, t) => { const c = t.currency || "₩"; acc[c] = (acc[c] || 0) + t.pnl; return acc; }, {});
               return (
                 <div key={name} style={{ padding: 12, background: s.surface2, borderRadius: 8 }}>
@@ -1062,6 +1137,74 @@ function StatsTab({ trades }) {
               );
             })}
           </div>
+        </Card>
+      )}
+
+      {/* 백테스팅 통계 */}
+      {btTrades.length > 0 && (
+        <Card accent={s.accent3}>
+          <div style={{ fontSize: 11, color: s.accent3, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}><Target size={13} /> 전략 백테스팅 통계 ({btTrades.length}건)</div>
+
+          {/* 손절 유형별 */}
+          {Object.keys(slTypeMap).length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, color: s.muted, fontWeight: 600, marginBottom: 10 }}>손절 유형별 비교</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {Object.entries(slTypeMap).map(([type, d]) => {
+                  const wr = Math.round(d.wins / d.total * 100);
+                  const slHitRate = Math.round(d.slHit / d.total * 100);
+                  const shRate = d.slHit > 0 ? Math.round(d.stophunt / d.slHit * 100) : 0;
+                  return (
+                    <div key={type} style={{ padding: 12, background: s.surface2, borderRadius: 10 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>{type} <span style={{ fontWeight: 400, fontSize: 11, color: s.muted }}>({d.total}건)</span></div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 8 }}>
+                        <div style={{ textAlign: "center", padding: "8px", background: s.surface, borderRadius: 8 }}>
+                          <div style={{ fontSize: 10, color: s.muted, marginBottom: 4 }}>승률</div>
+                          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 16, fontWeight: 700, color: wr >= 50 ? s.green : s.red }}>{wr}%</div>
+                        </div>
+                        <div style={{ textAlign: "center", padding: "8px", background: s.surface, borderRadius: 8 }}>
+                          <div style={{ fontSize: 10, color: s.muted, marginBottom: 4 }}>손절 비율</div>
+                          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 16, fontWeight: 700, color: slHitRate > 40 ? s.red : s.muted }}>{slHitRate}%</div>
+                        </div>
+                        <div style={{ textAlign: "center", padding: "8px", background: s.surface, borderRadius: 8 }}>
+                          <div style={{ fontSize: 10, color: s.muted, marginBottom: 4 }}>스탑헌팅률</div>
+                          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 16, fontWeight: 700, color: shRate > 50 ? s.accent3 : s.muted }}>{d.slHit > 0 ? shRate + "%" : "-"}</div>
+                        </div>
+                      </div>
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ height: 4, background: s.surface, borderRadius: 2, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: wr + "%", background: wr >= 50 ? s.green : s.red, borderRadius: 2 }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 진입 구간별 */}
+          {Object.keys(ezMap).length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, color: s.muted, fontWeight: 600, marginBottom: 10 }}>진입 구간별 승률</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {Object.entries(ezMap).sort((a, b) => (b[1].wins/b[1].total) - (a[1].wins/a[1].total)).map(([zone, d]) => {
+                  const wr = Math.round(d.wins / d.total * 100);
+                  return (
+                    <div key={zone}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                        <span style={{ color: s.text }}>{zone} <span style={{ color: s.muted }}>({d.total}건)</span></span>
+                        <span style={{ fontFamily: "'JetBrains Mono',monospace", color: wr >= 50 ? s.green : s.red, fontWeight: 700 }}>{wr}%</span>
+                      </div>
+                      <div style={{ height: 6, background: s.surface2, borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: wr + "%", background: wr >= 50 ? s.green : s.accent3, borderRadius: 3 }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </Card>
       )}
     </div>
@@ -1226,9 +1369,27 @@ function TradeDetail({ t }) {
 }
 
 // ── Settings Tab ──────────────────────────────────────────────────────
-function SettingsTab({ trades, capitals, onExportJSON, onExportCSV, onImport, onSetCapital, onClearAll }) {
+function SettingsTab({ trades, capitals, strategies, onSaveStrategies, onExportJSON, onExportCSV, onImport, onSetCapital, onClearAll }) {
   const [confirmClear, setConfirmClear] = useState(false);
-  const totalCapital = Object.values(capitals).reduce((a, v) => a + v, 0);
+  const [newEntryZone, setNewEntryZone] = useState("");
+  const [newSlType, setNewSlType] = useState("");
+  const totalCapital = Object.values(capitals).reduce((a, v) => {
+    const cap = typeof v === "object" ? v : { amount: v, currency: "₩" };
+    return cap.currency === "₩" ? a + cap.amount : a;
+  }, 0);
+
+  const addEntryZone = () => {
+    if (!newEntryZone.trim()) return;
+    onSaveStrategies({ ...strategies, entryZones: [...(strategies.entryZones || []), newEntryZone.trim()] });
+    setNewEntryZone("");
+  };
+  const removeEntryZone = (v) => onSaveStrategies({ ...strategies, entryZones: strategies.entryZones.filter(e => e !== v) });
+  const addSlType = () => {
+    if (!newSlType.trim()) return;
+    onSaveStrategies({ ...strategies, slTypes: [...(strategies.slTypes || []), newSlType.trim()] });
+    setNewSlType("");
+  };
+  const removeSlType = (v) => onSaveStrategies({ ...strategies, slTypes: strategies.slTypes.filter(e => e !== v) });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, animation: "fadeIn 0.3s ease" }}>
@@ -1280,6 +1441,45 @@ function SettingsTab({ trades, capitals, onExportJSON, onExportCSV, onImport, on
         <Btn onClick={onImport} variant="ghost" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
           <RefreshCw size={14} /> JSON 파일 가져오기
         </Btn>
+      </Card>
+
+      {/* 전략 관리 */}
+      <Card accent={s.accent3}>
+        <div style={{ fontSize: 11, color: s.accent3, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}><Target size={13} /> 백테스팅 전략 관리</div>
+
+        {/* 진입 구간 */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 12, color: s.muted, fontWeight: 600, marginBottom: 10 }}>진입 구간</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+            {(strategies?.entryZones || []).map(v => (
+              <div key={v} style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 20, border: "1px solid " + s.border, background: s.surface2 }}>
+                <span style={{ fontSize: 12, color: s.text }}>{v}</span>
+                <button onClick={() => removeEntryZone(v)} style={{ background: "none", border: "none", cursor: "pointer", color: s.muted, display: "flex", alignItems: "center", padding: 0 }}><X size={11} /></button>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input placeholder="새 진입 구간 추가..." value={newEntryZone} onChange={e => setNewEntryZone(e.target.value)} onKeyDown={e => e.key === "Enter" && addEntryZone()} style={{ flex: 1 }} />
+            <Btn onClick={addEntryZone} style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>추가</Btn>
+          </div>
+        </div>
+
+        {/* 손절 유형 */}
+        <div>
+          <div style={{ fontSize: 12, color: s.muted, fontWeight: 600, marginBottom: 10 }}>손절 유형</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+            {(strategies?.slTypes || []).map(v => (
+              <div key={v} style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 20, border: "1px solid " + s.border, background: s.surface2 }}>
+                <span style={{ fontSize: 12, color: s.text }}>{v}</span>
+                <button onClick={() => removeSlType(v)} style={{ background: "none", border: "none", cursor: "pointer", color: s.muted, display: "flex", alignItems: "center", padding: 0 }}><X size={11} /></button>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input placeholder="새 손절 유형 추가..." value={newSlType} onChange={e => setNewSlType(e.target.value)} onKeyDown={e => e.key === "Enter" && addSlType()} style={{ flex: 1 }} />
+            <Btn onClick={addSlType} style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>추가</Btn>
+          </div>
+        </div>
       </Card>
 
       {/* 계좌 설정 */}
