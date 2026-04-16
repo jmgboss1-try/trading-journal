@@ -650,6 +650,12 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
   const lev = isFutures ? (parseFloat(meta.lev) || 1) : 1;
   const [showSlTp, setShowSlTp] = useState(false);
 
+  // 자산별 사용 가능한 통화
+  const assetKey = ASSET_KEYS[meta.assetIdx];
+  const availableCurrencies = assetKey === "국내주식" ? ["₩"]
+    : assetKey === "해외주식" ? ["₩", "USD"]
+    : ["₩", "USDT"]; // 암호화폐 현물/선물
+
   // 평균 진입가 / 총 진입수량
   const totalEntryQty = entries.reduce((a, e) => a + (parseFloat(e.qty) || 0), 0);
   const avgEntry = totalEntryQty > 0
@@ -795,14 +801,21 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
             </FormField>
           )}
           <div style={{ display: "grid", gridTemplateColumns: isFutures ? "1fr 1fr" : "1fr", gap: 12 }}>
-            <FormField label="통화">
-              <div style={{ display: "flex", gap: 6 }}>
-                {CURRENCIES.map(c => <button key={c} onClick={() => setM("currency", c)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", background: meta.currency === c ? s.accent : s.surface2, color: meta.currency === c ? "#000" : s.muted }}>{c}</button>)}
-              </div>
-            </FormField>
+            {availableCurrencies.length > 1 && (
+              <FormField label="통화">
+                <div style={{ display: "flex", gap: 6 }}>
+                  {availableCurrencies.map(c => <button key={c} onClick={() => setM("currency", c)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", background: meta.currency === c ? s.accent : s.surface2, color: meta.currency === c ? "#000" : s.muted }}>{c}</button>)}
+                </div>
+              </FormField>
+            )}
             {isFutures && <FormField label="레버리지"><input type="number" placeholder="1" min="1" value={meta.lev} onChange={e => setM("lev", e.target.value)} /></FormField>}
           </div>
-          <FormField label="자산 유형"><select value={meta.assetIdx} onChange={e => setM("assetIdx", parseInt(e.target.value))}>{visibleAssets.map((a, i) => { const realIdx = ASSET_KEYS.indexOf(visibleAssetKeys[i]); return <option key={realIdx} value={realIdx}>{a}</option>; })}</select></FormField>
+          <FormField label="자산 유형"><select value={meta.assetIdx} onChange={e => {
+            const idx = parseInt(e.target.value);
+            const key = ASSET_KEYS[idx];
+            const curs = key === "국내주식" ? ["₩"] : key === "해외주식" ? ["₩", "USD"] : ["₩", "USDT"];
+            setMeta(f => ({ ...f, assetIdx: idx, currency: curs.includes(f.currency) ? f.currency : curs[0] }));
+          }}>{visibleAssets.map((a, i) => { const realIdx = ASSET_KEYS.indexOf(visibleAssetKeys[i]); return <option key={realIdx} value={realIdx}>{a}</option>; })}</select></FormField>
           <FormField label="종목명"><input placeholder="예: 삼성전자, AAPL, BTC/USDT" value={meta.symbol} onChange={e => setM("symbol", e.target.value)} /></FormField>
         </div>
       </Card>
@@ -970,7 +983,14 @@ function HistoryTab({ trades, onDelete, onEdit, setModal, activeAssets }) {
                     <div style={{ fontSize: 11, color: s.muted, marginBottom: 6 }}>{t.date} • {t.assetKey}</div>
                     <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                       <div><div style={{ fontSize: 10, color: s.muted }}>진입가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{t.entry?.toLocaleString()}</div></div>
-                      <div><div style={{ fontSize: 10, color: s.muted }}>수량</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: s.text }}>{t.qty}</div></div>
+                      {(() => {
+                        const totalE = t.entries ? t.entries.reduce((a, e) => a + (e.qty || 0), 0) : (t.qty || 0);
+                        const totalX = t.exits ? t.exits.reduce((a, e) => a + (e.qty || 0), 0) : 0;
+                        const remaining = Math.max(0, totalE - totalX);
+                        return t.status === "청산"
+                          ? <div><div style={{ fontSize: 10, color: s.muted }}>총수량</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{totalE}</div></div>
+                          : <div><div style={{ fontSize: 10, color: s.muted }}>보유</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: s.accent3, fontWeight: 700 }}>{remaining}<span style={{ fontSize: 10, color: s.muted, fontWeight: 400 }}> / {totalE}</span></div></div>;
+                      })()}
                       {t.exit && <div><div style={{ fontSize: 10, color: s.muted }}>청산가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{t.exit.toLocaleString()}</div></div>}
                       {t.status !== "홀딩" && <>
                         <div><div style={{ fontSize: 10, color: s.muted }}>손익</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700, color: t.pnl >= 0 ? s.green : s.red }}>{fmt(t.pnl, t.currency)}</div></div>
