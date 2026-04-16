@@ -720,8 +720,11 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
 
   const handleSave = () => {
     if (!meta.symbol.trim()) { alert("종목명을 입력해주세요"); return; }
-    if (entries.length === 0 || !entries[0].price || !entries[0].qty) { alert("진입가와 수량을 입력해주세요"); return; }
+    if (!entries[0].price || !entries[0].qty) { alert("진입가와 수량을 입력해주세요"); return; }
     const firstDate = entries[0].date || todayStr();
+    const entryList = entries.map(e => ({ ...e, price: parseFloat(e.price) || 0, qty: parseFloat(e.qty) || 0 }));
+    const totalQty = entryList.reduce((a, e) => a + e.qty, 0);
+    const avgEntryPrice = totalQty > 0 ? entryList.reduce((a, e) => a + e.price * e.qty, 0) / totalQty : 0;
     const trade = {
       id: Date.now(),
       date: firstDate,
@@ -736,15 +739,13 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
       emotion: meta.emotion,
       memo: meta.memo,
       chartImg: imgBase64 || null,
-      status,
-      // 분할진입/청산 내역
-      entries: entries.map(e => ({ ...e, price: parseFloat(e.price) || 0, qty: parseFloat(e.qty) || 0 })),
-      exits: exits.map(e => ({ ...e, price: parseFloat(e.price) || 0, qty: parseFloat(e.qty) || 0 })),
-      // 요약 (기존 호환용)
-      entry: Math.round(avgEntry * 100) / 100,
-      exit: isFullyClosed || isPartial ? Math.round(avgExit * 100) / 100 : null,
-      qty: totalEntryQty,
-      pnl, pct,
+      status: "홀딩",
+      entries: entryList,
+      exits: [],
+      entry: Math.round(avgEntryPrice * 100) / 100,
+      exit: null,
+      qty: totalQty,
+      pnl: 0, pct: 0,
       entryZone: meta.entryZone, slType: meta.slType,
       slHit: meta.slHit, stophunt: meta.stophunt
     };
@@ -752,7 +753,7 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
     setSaved(true);
     setImgBase64(null); setImgPreview(null); setScanMsg("");
     setTimeout(() => setSaved(false), 2000);
-    setEntries([emptyLeg()]); setExits([]);
+    setEntries([emptyLeg()]);
     setMeta(m => ({ ...m, symbol: "", lev: "1", sl: "", tp: "", risk: 5, emotion: "", memo: "", entryZone: "", slType: "", slHit: "", stophunt: "" }));
   };
 
@@ -783,23 +784,9 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
         )}
       </Card>
 
-      {/* 손익 미리보기 */}
-      {avgEntry > 0 && avgExit > 0 && closedQty > 0 && (
-        <div style={{ background: pnl >= 0 ? "rgba(0,230,118,0.08)" : "rgba(255,61,113,0.08)", border: "1px solid " + (pnl >= 0 ? "rgba(0,230,118,0.3)" : "rgba(255,61,113,0.3)"), borderRadius: 10, padding: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px,1fr))", gap: 8, textAlign: "center" }}>
-            <div><div style={{ fontSize: 10, color: s.muted, marginBottom: 4 }}>평균 진입가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{avgEntry.toFixed(2)}</div></div>
-            <div><div style={{ fontSize: 10, color: s.muted, marginBottom: 4 }}>평균 청산가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{avgExit.toFixed(2)}</div></div>
-            <div><div style={{ fontSize: 10, color: s.muted, marginBottom: 4 }}>실현 손익</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700, color: pnl >= 0 ? s.green : s.red }}>{fmt(pnl, meta.currency)}</div></div>
-            <div><div style={{ fontSize: 10, color: s.muted, marginBottom: 4 }}>수익률</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700, color: pct >= 0 ? s.green : s.red }}>{fmtPct(pct)}</div></div>
-            <div><div style={{ fontSize: 10, color: s.muted, marginBottom: 4 }}>상태</div><div style={{ fontSize: 12, fontWeight: 700, color: status === "청산" ? s.green : s.accent3 }}>{status}</div></div>
-          </div>
-        </div>
-      )}
-
       {/* 기본 정보 */}
       <Card>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {/* 방향 - 선물만 표시 */}
           {isFutures && (
             <FormField label="방향">
               <div style={{ display: "flex", gap: 8 }}>
@@ -813,13 +800,27 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
                 {CURRENCIES.map(c => <button key={c} onClick={() => setM("currency", c)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", background: meta.currency === c ? s.accent : s.surface2, color: meta.currency === c ? "#000" : s.muted }}>{c}</button>)}
               </div>
             </FormField>
-            {/* 레버리지 - 선물만 */}
             {isFutures && <FormField label="레버리지"><input type="number" placeholder="1" min="1" value={meta.lev} onChange={e => setM("lev", e.target.value)} /></FormField>}
           </div>
           <FormField label="자산 유형"><select value={meta.assetIdx} onChange={e => setM("assetIdx", parseInt(e.target.value))}>{visibleAssets.map((a, i) => { const realIdx = ASSET_KEYS.indexOf(visibleAssetKeys[i]); return <option key={realIdx} value={realIdx}>{a}</option>; })}</select></FormField>
           <FormField label="종목명"><input placeholder="예: 삼성전자, AAPL, BTC/USDT" value={meta.symbol} onChange={e => setM("symbol", e.target.value)} /></FormField>
+        </div>
+      </Card>
 
-          {/* 손절가/목표가 토글 */}
+      {/* 진입 정보 */}
+      <Card accent={s.green}>
+        <div style={{ fontSize: 11, color: s.green, fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}><TrendingUp size={13} /> 첫 진입</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {entries.map((leg, i) => (
+            <LegRow key={i} leg={leg} label={"진입" + (entries.length > 1 ? (i + 1) : "")} onChange={(k, v) => setEntry(i, k, v)} onRemove={() => removeEntry(i)} canRemove={entries.length > 1} />
+          ))}
+        </div>
+        <button onClick={addEntry} style={{ marginTop: 10, width: "100%", padding: "8px 0", background: "rgba(0,230,118,0.06)", border: "1px dashed rgba(0,230,118,0.4)", borderRadius: 8, color: s.green, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+ 분할진입 추가</button>
+      </Card>
+
+      {/* 추가 설정 */}
+      <Card>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <button onClick={() => setShowSlTp(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "1px dashed " + s.border, borderRadius: 8, color: s.muted, padding: "8px 14px", cursor: "pointer", fontSize: 12, width: "fit-content" }}>
             <span>{showSlTp ? "▲" : "▼"}</span>
             {showSlTp ? "손절가/목표가 닫기" : "손절가/목표가 입력"}
@@ -830,7 +831,6 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
               <FormField label="목표가"><input type="number" placeholder="0" value={meta.tp} onChange={e => setM("tp", e.target.value)} /></FormField>
             </div>
           )}
-
           <FormField label={"리스크 체감: " + meta.risk + "/10"}>
             <input type="range" min="1" max="10" value={meta.risk} onChange={e => setM("risk", parseInt(e.target.value))} style={{ background: "linear-gradient(90deg, " + s.accent + " " + (meta.risk * 10) + "%, " + s.border + " " + (meta.risk * 10) + "%)" }} />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: s.muted, marginTop: 2 }}><span>낮음</span><span>높음</span></div>
@@ -840,38 +840,8 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
               {EMOTIONS.map(e => <button key={e.value} onClick={() => setM("emotion", meta.emotion === e.value ? "" : e.value)} style={{ background: meta.emotion === e.value ? s.accent : s.surface2, border: "1px solid " + (meta.emotion === e.value ? s.accent : s.border), color: meta.emotion === e.value ? "#000" : s.text, padding: "6px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer", fontWeight: meta.emotion === e.value ? 700 : 400, fontFamily: "'Noto Sans KR', sans-serif" }}>{e.label}</button>)}
             </div>
           </FormField>
-          <FormField label="메모"><textarea placeholder="진입 이유, 시장 상황, 반성 등..." value={meta.memo} onChange={e => setM("memo", e.target.value)} /></FormField>
+          <FormField label="진입 근거 / 메모"><textarea placeholder="진입 이유, 시장 상황, 기대 시나리오..." value={meta.memo} onChange={e => setM("memo", e.target.value)} /></FormField>
         </div>
-      </Card>
-
-      {/* 분할 진입 */}
-      <Card accent={s.green}>
-        <div style={{ fontSize: 11, color: s.green, fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span><TrendingUp size={13} style={{ marginRight: 6 }} />진입 내역 ({entries.length}건 · 총 {totalEntryQty > 0 ? totalEntryQty : 0} 수량)</span>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {entries.map((leg, i) => (
-            <LegRow key={i} leg={leg} label={"진입" + (entries.length > 1 ? (i + 1) : "")} onChange={(k, v) => setEntry(i, k, v)} onRemove={() => removeEntry(i)} canRemove={entries.length > 1} />
-          ))}
-        </div>
-        <button onClick={addEntry} style={{ marginTop: 10, width: "100%", padding: "8px 0", background: "rgba(0,230,118,0.08)", border: "1px dashed rgba(0,230,118,0.4)", borderRadius: 8, color: s.green, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ 진입 추가</button>
-      </Card>
-
-      {/* 분할 청산 */}
-      <Card accent={s.red}>
-        <div style={{ fontSize: 11, color: s.red, fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span><TrendingDown size={13} style={{ marginRight: 6 }} />청산 내역 ({exits.length}건 · 총 {totalExitQty > 0 ? totalExitQty : 0} 수량)</span>
-          {totalEntryQty > 0 && <span style={{ fontSize: 10, color: s.muted, fontWeight: 400 }}>미청산: {Math.max(0, totalEntryQty - totalExitQty)} 수량</span>}
-        </div>
-        {exits.length === 0
-          ? <div style={{ textAlign: "center", color: s.muted, fontSize: 12, padding: "12px 0" }}>청산 내역 없음 (홀딩 중)</div>
-          : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {exits.map((leg, i) => (
-                <LegRow key={i} leg={leg} label={"청산" + (exits.length > 1 ? (i + 1) : "")} onChange={(k, v) => setExit(i, k, v)} onRemove={() => removeExit(i)} canRemove={true} />
-              ))}
-            </div>
-        }
-        <button onClick={addExit} style={{ marginTop: 10, width: "100%", padding: "8px 0", background: "rgba(255,61,113,0.08)", border: "1px dashed rgba(255,61,113,0.4)", borderRadius: 8, color: s.red, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ 청산 추가</button>
       </Card>
 
       {/* 백테스팅 전략 */}
@@ -900,7 +870,7 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
             </div>
           </FormField>
           {meta.slHit === "손절 맞음" && (
-            <FormField label="손절 후 가격 방향 (스탑헌팅 확인)">
+            <FormField label="손절 후 가격 방향">
               <div style={{ display: "flex", gap: 8 }}>
                 {[["원래 방향으로 돌아감 (스탑헌팅)", s.accent3], ["계속 반대 방향 (정상 손절)", s.muted]].map(([v, c]) => (
                   <button key={v} onClick={() => setM("stophunt", meta.stophunt === v ? "" : v)} style={{ flex: 1, padding: "8px 6px", borderRadius: 8, border: "1px solid " + (meta.stophunt === v ? c : s.border), background: meta.stophunt === v ? c + "22" : "transparent", color: meta.stophunt === v ? c : s.muted, fontSize: 11, cursor: "pointer", fontWeight: meta.stophunt === v ? 700 : 400, fontFamily: "'Noto Sans KR', sans-serif", textAlign: "center" }}>{v}</button>
@@ -936,7 +906,7 @@ function HistoryTab({ trades, onDelete, onEdit, setModal, activeAssets }) {
   });
 
   const handleAddLeg = (trade, type, leg) => {
-    const newLeg = { date: leg.date, time: leg.time, price: parseFloat(leg.price) || 0, qty: parseFloat(leg.qty) || 0 };
+    const newLeg = { date: leg.date, time: leg.time, price: parseFloat(leg.price) || 0, qty: parseFloat(leg.qty) || 0, memo: leg.memo || "" };
     const entries = [...(trade.entries || [{ date: trade.date, time: "", price: trade.entry || 0, qty: trade.qty || 0 }])];
     const exits = [...(trade.exits || (trade.exit ? [{ date: trade.date, time: "", price: trade.exit, qty: trade.qty || 0 }] : []))];
 
@@ -999,7 +969,9 @@ function HistoryTab({ trades, onDelete, onEdit, setModal, activeAssets }) {
                     </div>
                     <div style={{ fontSize: 11, color: s.muted, marginBottom: 6 }}>{t.date} • {t.assetKey}</div>
                     <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                      <div><div style={{ fontSize: 10, color: s.muted }}>진입→청산</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{t.entry?.toLocaleString()} → {t.exit ? t.exit.toLocaleString() : <span style={{ color: s.accent3 }}>홀딩</span>}</div></div>
+                      <div><div style={{ fontSize: 10, color: s.muted }}>진입가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{t.entry?.toLocaleString()}</div></div>
+                      <div><div style={{ fontSize: 10, color: s.muted }}>수량</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: s.text }}>{t.qty}</div></div>
+                      {t.exit && <div><div style={{ fontSize: 10, color: s.muted }}>청산가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{t.exit.toLocaleString()}</div></div>}
                       {t.status !== "홀딩" && <>
                         <div><div style={{ fontSize: 10, color: s.muted }}>손익</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700, color: t.pnl >= 0 ? s.green : s.red }}>{fmt(t.pnl, t.currency)}</div></div>
                         <div><div style={{ fontSize: 10, color: s.muted }}>수익률</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: t.pct >= 0 ? s.green : s.red }}>{fmtPct(t.pct)}</div></div>
@@ -1041,7 +1013,7 @@ function HistoryTab({ trades, onDelete, onEdit, setModal, activeAssets }) {
 }
 
 function AddLegForm({ trade, type, onSave, onCancel }) {
-  const [leg, setLeg] = useState({ date: todayStr(), time: "", price: "", qty: "" });
+  const [leg, setLeg] = useState({ date: todayStr(), time: "", price: "", qty: "", memo: "" });
   const setL = (k, v) => setLeg(f => ({ ...f, [k]: v }));
   const isEntry = type === "entry";
   const color = isEntry ? s.green : s.red;
@@ -1059,13 +1031,13 @@ function AddLegForm({ trade, type, onSave, onCancel }) {
         <div style={{ fontWeight: 700, fontSize: 15 }}>{trade.symbol} — {label} 기록</div>
       </div>
 
-      {/* 기존 포지션 현황 */}
+      {/* 현재 포지션 현황 */}
       <Card>
         <div style={{ fontSize: 11, color: s.muted, marginBottom: 10 }}>현재 포지션</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px,1fr))", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px,1fr))", gap: 10 }}>
           <div><div style={{ fontSize: 10, color: s.muted }}>종목</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700 }}>{trade.symbol}</div></div>
-          <div><div style={{ fontSize: 10, color: s.muted }}>방향</div><div style={{ fontSize: 13, color: trade.dir === "롱" ? s.green : s.red, fontWeight: 700 }}>{trade.dir}</div></div>
-          <div><div style={{ fontSize: 10, color: s.muted }}>총 수량</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13 }}>{trade.qty}</div></div>
+          {(trade.dir === "롱" || trade.dir === "숏") && <div><div style={{ fontSize: 10, color: s.muted }}>방향</div><div style={{ fontSize: 13, color: trade.dir === "롱" ? s.green : s.red, fontWeight: 700 }}>{trade.dir}</div></div>}
+          <div><div style={{ fontSize: 10, color: s.muted }}>보유수량</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13 }}>{trade.qty}</div></div>
           <div><div style={{ fontSize: 10, color: s.muted }}>평균 진입가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13 }}>{trade.entry?.toLocaleString()}</div></div>
           <div><div style={{ fontSize: 10, color: s.muted }}>상태</div><div style={{ fontSize: 13, color: s.accent3, fontWeight: 700 }}>{trade.status || "홀딩"}</div></div>
         </div>
@@ -1086,13 +1058,13 @@ function AddLegForm({ trade, type, onSave, onCancel }) {
             <FormField label="수량"><input type="number" placeholder="0" value={leg.qty} onChange={e => setL("qty", e.target.value)} /></FormField>
           </div>
           {leg.price && leg.qty && (
-            <div style={{ padding: 12, background: s.surface2, borderRadius: 8, fontSize: 12, color: s.muted }}>
-              {isEntry
-                ? `추가 매수: ${parseFloat(leg.qty)}주 × ${parseFloat(leg.price).toLocaleString()} = ${(parseFloat(leg.price) * parseFloat(leg.qty)).toLocaleString()} ${trade.currency || "₩"}`
-                : `청산: ${parseFloat(leg.qty)}주 × ${parseFloat(leg.price).toLocaleString()} = ${(parseFloat(leg.price) * parseFloat(leg.qty)).toLocaleString()} ${trade.currency || "₩"}`
-              }
+            <div style={{ padding: 10, background: s.surface2, borderRadius: 8, fontSize: 12, color: s.muted }}>
+              {parseFloat(leg.qty)}주 × {parseFloat(leg.price).toLocaleString()} = {(parseFloat(leg.price) * parseFloat(leg.qty)).toLocaleString()} {trade.currency || "₩"}
             </div>
           )}
+          <FormField label={isEntry ? "추가 진입 이유 (선택)" : "청산 이유 (선택)"}>
+            <textarea placeholder={isEntry ? "추가 매수 근거, 시장 상황..." : "청산 이유, 목표 달성, 손절 이유..."} value={leg.memo} onChange={e => setL("memo", e.target.value)} style={{ minHeight: 72 }} />
+          </FormField>
         </div>
       </Card>
 
