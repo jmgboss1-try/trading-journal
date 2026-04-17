@@ -289,8 +289,9 @@ export default function App() {
     acc[cur] = (acc[cur] || 0) + t.pnl;
     return acc;
   }, {});
-  const wins = trades.filter(t => t.pnl > 0).length;
-  const wr = trades.length ? Math.round(wins / trades.length * 100) : 0;
+  const closedTrades = trades.filter(t => t.status === "청산" || t.status === "부분청산" || (t.status !== "홀딩" && t.pnl !== 0));
+  const wins = closedTrades.filter(t => t.pnl > 0).length;
+  const wr = closedTrades.length ? Math.round(wins / closedTrades.length * 100) : 0;
 
   // 헬퍼: capitals에서 amount/currency 추출
   const getCapInfo = (key) => {
@@ -320,7 +321,7 @@ export default function App() {
             ) : Object.entries(pnlByCurrency).map(([cur, val]) => (
               <div key={cur} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 15, fontWeight: 700, color: val >= 0 ? s.green : s.red }}>{fmt(val, cur)}</div>
             ))}
-            <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>승률 <span style={{ color: wr >= 50 ? s.green : s.red, fontWeight: 600 }}>{wr}%</span> · {trades.length}건</div>
+            <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>승률 <span style={{ color: wr >= 50 ? s.green : s.red, fontWeight: 600 }}>{wr}%</span> · {closedTrades.length}건 청산</div>
           </div>
         </div>
 
@@ -443,9 +444,10 @@ export default function App() {
 function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency, activeAssets, onSetCapital }) {
   const visibleAccounts = ACCOUNT_LIST.filter(a => !activeAssets || activeAssets.includes(a.key));
   const total = trades.length;
-  const wins = trades.filter(t => t.pnl > 0).length;
-  const losses = total - wins;
-  const wr = total ? Math.round(wins / total * 100) : 0;
+  const closedTrades = trades.filter(t => t.status === "청산" || t.status === "부분청산" || (t.status !== "홀딩" && t.pnl !== 0));
+  const wins = closedTrades.filter(t => t.pnl > 0).length;
+  const losses = closedTrades.filter(t => t.pnl < 0).length;
+  const wr = closedTrades.length ? Math.round(wins / closedTrades.length * 100) : 0;
   const avgW = wins ? trades.filter(t => t.pnl > 0).reduce((a, t) => a + t.pnl, 0) / wins : 0;
   const avgL = losses ? Math.abs(trades.filter(t => t.pnl < 0).reduce((a, t) => a + t.pnl, 0) / losses) : 0;
   const rr = avgL > 0 ? (avgW / avgL).toFixed(2) : "-";
@@ -1278,13 +1280,13 @@ function CalendarHeatmap({ trades }) {
           return (
             <div key={day} className="cal-cell" style={{
               background: isProfit ? "rgba(0,230,118,0.1)" : isLoss ? "rgba(255,61,113,0.1)" : s.surface2,
-              borderRadius: 5, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              borderRadius: 5, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "space-between",
               border: "1px solid " + (isToday ? s.accent : isProfit ? "rgba(0,230,118,0.3)" : isLoss ? "rgba(255,61,113,0.3)" : s.border),
-              padding: "2px 0", gap: 1
+              padding: "4px 5px",
             }}>
               <span style={{ fontSize: 11, color: isToday ? s.accent : hasTrade ? s.text : s.muted, fontWeight: isToday ? 700 : 400 }}>{day}</span>
               {mainCur && mainCur[0] && (
-                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, fontWeight: 700, color: isProfit ? s.green : s.red, lineHeight: 1 }}>
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 700, color: isProfit ? s.green : s.red, lineHeight: 1.2, wordBreak: "break-all" }}>
                   {fmtShort(mainCur[1], mainCur[0])}
                 </span>
               )}
@@ -1297,17 +1299,18 @@ function CalendarHeatmap({ trades }) {
 }
 
 function StatsTab({ trades }) {
-  const wins = trades.filter(t => t.pnl > 0);
-  const losses = trades.filter(t => t.pnl < 0);
+  const closedTrades = trades.filter(t => t.status === "청산" || t.status === "부분청산" || (t.status !== "홀딩" && t.pnl !== 0));
+  const wins = closedTrades.filter(t => t.pnl > 0);
+  const losses = closedTrades.filter(t => t.pnl < 0);
   const monthly = {};
   trades.forEach(t => { const m = t.date && t.date.substring(0, 7); if (m) monthly[m] = (monthly[m] || 0) + t.pnl; });
   const monthData = Object.keys(monthly).sort().map(k => ({ month: k.substring(5), pnl: Math.round(monthly[k]) }));
   const emotionMap = {};
-  trades.forEach(t => { if (!t.emotion) return; if (!emotionMap[t.emotion]) emotionMap[t.emotion] = { w: 0, total: 0 }; emotionMap[t.emotion].total++; if (t.pnl > 0) emotionMap[t.emotion].w++; });
+  closedTrades.forEach(t => { if (!t.emotion) return; if (!emotionMap[t.emotion]) emotionMap[t.emotion] = { w: 0, total: 0 }; emotionMap[t.emotion].total++; if (t.pnl > 0) emotionMap[t.emotion].w++; });
   const emotionData = Object.entries(emotionMap).map(([name, e]) => ({ name, wr: Math.round(e.w / e.total * 100), total: e.total })).sort((a, b) => b.wr - a.wr);
   const assetMap = {};
-  trades.forEach(t => { if (!assetMap[t.assetKey]) assetMap[t.assetKey] = { trades: [], wins: 0 }; assetMap[t.assetKey].trades.push(t); if (t.pnl > 0) assetMap[t.assetKey].wins++; });
-  const avgPct = trades.length ? trades.reduce((a, t) => a + t.pct, 0) / trades.length : 0;
+  closedTrades.forEach(t => { if (!assetMap[t.assetKey]) assetMap[t.assetKey] = { trades: [], wins: 0 }; assetMap[t.assetKey].trades.push(t); if (t.pnl > 0) assetMap[t.assetKey].wins++; });
+  const avgPct = closedTrades.length ? closedTrades.reduce((a, t) => a + t.pct, 0) / closedTrades.length : 0;
   const maxWin = wins.length ? wins.reduce((a, t) => t.pnl > a.pnl ? t : a) : null;
   const maxLoss = losses.length ? losses.reduce((a, t) => t.pnl < a.pnl ? t : a) : null;
 
@@ -1334,7 +1337,7 @@ function StatsTab({ trades }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, animation: "fadeIn 0.3s ease" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}><StatCard label="총 거래" value={trades.length} /><StatCard label="수익" value={wins.length} color={s.green} /><StatCard label="손실" value={losses.length} color={s.red} /></div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}><StatCard label="청산 거래" value={closedTrades.length} /><StatCard label="수익" value={wins.length} color={s.green} /><StatCard label="손실" value={losses.length} color={s.red} /></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <StatCard label="최대 수익" value={maxWin ? fmt(maxWin.pnl, maxWin.currency) : "-"} color={s.green} />
         <StatCard label="최대 손실" value={maxLoss ? fmt(maxLoss.pnl, maxLoss.currency) : "-"} color={s.red} />
