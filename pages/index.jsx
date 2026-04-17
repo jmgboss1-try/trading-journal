@@ -1190,7 +1190,6 @@ function CalendarHeatmap({ trades }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
-  const [tooltip, setTooltip] = useState(null);
   const dayMap = {};
   trades.forEach(t => {
     if (!t.date) return;
@@ -1202,7 +1201,6 @@ function CalendarHeatmap({ trades }) {
   });
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const maxAbs = Math.max(...Object.values(dayMap).map(d => Math.abs(d.pnl)), 1);
   const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
   const mk = year + "-" + String(month + 1).padStart(2, "0");
 
@@ -1219,59 +1217,80 @@ function CalendarHeatmap({ trades }) {
   const cells = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  // 숫자 축약: 10000 → 1만, 1000000 → 100만
+  const fmtShort = (val, cur) => {
+    const abs = Math.abs(val);
+    const sign = val >= 0 ? "+" : "-";
+    if (cur === "₩") {
+      if (abs >= 1000000) return sign + (abs / 1000000).toFixed(1).replace(/\.0$/, "") + "만만";
+      if (abs >= 10000) return sign + Math.round(abs / 10000) + "만";
+      if (abs >= 1000) return sign + (abs / 1000).toFixed(1).replace(/\.0$/, "") + "천";
+      return sign + Math.round(abs);
+    }
+    if (abs >= 1000) return sign + (abs / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+    return sign + abs.toFixed(1);
+  };
+
   return (
     <Card>
+      {/* 헤더: 월 이동 + 이달 총 손익 */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ fontSize: 11, color: s.muted, display: "flex", alignItems: "center", gap: 6 }}><LayoutDashboard size={13} /> 매매 캘린더</div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <button onClick={prevM} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 6, color: s.muted, padding: "4px 6px", cursor: "pointer", display: "flex", alignItems: "center" }}><ChevronLeft size={14} /></button>
-          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, minWidth: 80, textAlign: "center" }}>{year}년 {month + 1}월</span>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700 }}>{year}년 {month + 1}월</div>
+            {Object.keys(monthByCurrency).length > 0 && (
+              <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
+                {Object.entries(monthByCurrency).map(([cur, val]) => (
+                  <span key={cur} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, color: val >= 0 ? s.green : s.red }}>{fmt(val, cur)}</span>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={nextM} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 6, color: s.muted, padding: "4px 6px", cursor: "pointer", display: "flex", alignItems: "center" }}><ChevronRight size={14} /></button>
         </div>
-      </div>
-      <div style={{ display: "flex", gap: 16, marginBottom: 12, padding: "8px 12px", background: s.surface2, borderRadius: 8, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 10, color: s.muted, marginBottom: 4 }}>이달 손익</div>
-          {Object.keys(monthByCurrency).length === 0
-            ? <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, color: s.muted }}>-</div>
-            : Object.entries(monthByCurrency).map(([cur, val]) => (
-              <div key={cur} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, fontWeight: 700, color: val >= 0 ? s.green : s.red }}>{fmt(val, cur)}</div>
-            ))}
+        <div style={{ display: "flex", gap: 12, fontSize: 11, color: s.muted }}>
+          <span>{monthDays}일 거래</span>
+          <span>{monthCount}건</span>
         </div>
-        <div><div style={{ fontSize: 10, color: s.muted }}>거래 일수</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, fontWeight: 700 }}>{monthDays > 0 ? monthDays + "일" : "-"}</div></div>
-        <div><div style={{ fontSize: 10, color: s.muted }}>거래 횟수</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, fontWeight: 700 }}>{monthCount > 0 ? monthCount + "건" : "-"}</div></div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 3 }}>
+
+      {/* 요일 헤더 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 2 }}>
         {DAY_LABELS.map((d, i) => <div key={d} style={{ textAlign: "center", fontSize: 10, color: i === 0 ? "#ff6b6b" : i === 6 ? s.accent : s.muted, fontWeight: 600, padding: "2px 0" }}>{d}</div>)}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
+
+      {/* 날짜 셀 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
         {cells.map((day, i) => {
           if (!day) return <div key={"e" + i} className="cal-cell" />;
           const ds = year + "-" + String(month + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
           const dd = dayMap[ds];
           const isToday = ds === todayStr();
-          const intensity = dd ? Math.min(Math.abs(dd.pnl) / maxAbs, 1) : 0;
-          const alpha = dd ? 0.2 + intensity * 0.7 : 0;
-          const bg = dd ? (dd.pnl > 0 ? "rgba(0,230,118," + alpha + ")" : "rgba(255,61,113," + alpha + ")") : s.surface2;
-          return <div key={day} className="cal-cell" onClick={() => setTooltip(tooltip && tooltip.date === ds ? null : dd ? { date: ds, ...dd } : null)} style={{ background: bg, borderRadius: 5, aspectRatio: "1", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, cursor: dd ? "pointer" : "default", border: "1px solid " + (isToday ? s.accent : "transparent"), color: dd && intensity > 0.5 ? "#fff" : s.muted, fontWeight: isToday ? 700 : 400 }}>{day}</div>;
-        })}
-      </div>
-      {tooltip && (
-        <div style={{ marginTop: 10, padding: "10px 14px", background: s.surface2, border: "1px solid " + s.border, borderRadius: 8, fontSize: 13 }}>
-          <div style={{ color: s.muted, fontSize: 11, marginBottom: 6 }}>{tooltip.date}</div>
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-            <div>
-              <div style={{ fontSize: 10, color: s.muted, marginBottom: 2 }}>손익</div>
-              {Object.entries(tooltip.byCurrency || {}).map(([cur, val]) => (
-                <div key={cur} style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color: val >= 0 ? s.green : s.red }}>{fmt(val, cur)}</div>
-              ))}
+          const hasTrade = !!dd;
+          const isProfit = dd && dd.pnl > 0;
+          const isLoss = dd && dd.pnl < 0;
+
+          // 통화별 주요 손익 (가장 큰 절대값)
+          const mainCur = dd ? Object.entries(dd.byCurrency).reduce((a, b) => Math.abs(b[1]) > Math.abs(a[1]) ? b : a, ["₩", 0]) : null;
+
+          return (
+            <div key={day} className="cal-cell" style={{
+              background: isProfit ? "rgba(0,230,118,0.1)" : isLoss ? "rgba(255,61,113,0.1)" : s.surface2,
+              borderRadius: 5, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              border: "1px solid " + (isToday ? s.accent : isProfit ? "rgba(0,230,118,0.3)" : isLoss ? "rgba(255,61,113,0.3)" : s.border),
+              padding: "2px 0", gap: 1
+            }}>
+              <span style={{ fontSize: 11, color: isToday ? s.accent : hasTrade ? s.text : s.muted, fontWeight: isToday ? 700 : 400 }}>{day}</span>
+              {mainCur && mainCur[0] && (
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, fontWeight: 700, color: isProfit ? s.green : s.red, lineHeight: 1 }}>
+                  {fmtShort(mainCur[1], mainCur[0])}
+                </span>
+              )}
             </div>
-            <div><span style={{ color: s.muted, fontSize: 11 }}>거래 </span><span style={{ fontFamily: "'JetBrains Mono',monospace" }}>{tooltip.count}건</span></div>
-          </div>
-        </div>
-      )}
-      <div style={{ display: "flex", gap: 12, marginTop: 10, justifyContent: "center" }}>
-        {[["rgba(0,230,118,0.7)", "수익"], [s.surface2, "없음"], ["rgba(255,61,113,0.7)", "손실"]].map(([bg, label]) => <div key={label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: s.muted }}><div style={{ width: 10, height: 10, borderRadius: 2, background: bg, border: bg === s.surface2 ? "1px solid " + s.border : "none" }} />{label}</div>)}
+          );
+        })}
       </div>
     </Card>
   );
@@ -1322,7 +1341,7 @@ function StatsTab({ trades }) {
         <StatCard label="평균 수익률" value={fmtPct(avgPct)} color={avgPct >= 0 ? s.green : s.red} />
       </div>
       <CalendarHeatmap trades={trades} />
-      {monthData.length > 0 && <Card><div style={{ fontSize: 11, color: s.muted, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><BarChart2 size={13} /> 월별 손익</div><ResponsiveContainer width="100%" height={160}><BarChart data={monthData}><XAxis dataKey="month" tick={{ fill: s.muted, fontSize: 11 }} /><YAxis hide /><Tooltip contentStyle={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmt(v), "손익"]} /><Bar dataKey="pnl" radius={[4, 4, 0, 0]}>{monthData.map((d, i) => <Cell key={i} fill={d.pnl >= 0 ? "rgba(0,230,118,0.7)" : "rgba(255,61,113,0.7)"} />)}</Bar></BarChart></ResponsiveContainer></Card>}
+      {monthData.length > 0 && <Card><div style={{ fontSize: 11, color: s.muted, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><BarChart2 size={13} /> 월별 손익</div><ResponsiveContainer width="100%" height={160}><BarChart data={monthData}><XAxis dataKey="month" tick={{ fill: s.muted, fontSize: 11 }} /><YAxis hide /><Tooltip contentStyle={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 8, fontSize: 12, color: s.text }} itemStyle={{ color: s.text }} labelStyle={{ color: s.muted }} formatter={(v) => [fmt(v), "손익"]} /><Bar dataKey="pnl" radius={[4, 4, 0, 0]}>{monthData.map((d, i) => <Cell key={i} fill={d.pnl >= 0 ? "rgba(0,230,118,0.7)" : "rgba(255,61,113,0.7)"} />)}</Bar></BarChart></ResponsiveContainer></Card>}
       {emotionData.length > 0 && <Card><div style={{ fontSize: 11, color: s.muted, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><Brain size={13} /> 감정별 승률</div><div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{emotionData.map(e => <div key={e.name}><div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span>{e.name} <span style={{ color: s.muted }}>({e.total}건)</span></span><span style={{ fontFamily: "'JetBrains Mono',monospace", color: e.wr >= 50 ? s.green : s.red }}>{e.wr}%</span></div><div style={{ height: 6, background: s.surface2, borderRadius: 3, overflow: "hidden" }}><div style={{ height: "100%", width: e.wr + "%", background: e.wr >= 50 ? s.green : s.red, borderRadius: 3 }} /></div></div>)}</div></Card>}
       {Object.keys(assetMap).length > 0 && (
         <Card>
