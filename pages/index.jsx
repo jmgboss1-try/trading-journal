@@ -1192,14 +1192,24 @@ function CalendarHeatmap({ trades }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
+
+  // 손익을 청산일 기준으로 집계 (진입일 아님)
   const dayMap = {};
   trades.forEach(t => {
-    if (!t.date) return;
-    if (!dayMap[t.date]) dayMap[t.date] = { pnl: 0, count: 0, byCurrency: {} };
+    if (!t.pnl || t.pnl === 0) return; // 홀딩 중인 건 제외
     const cur = t.currency || "₩";
-    dayMap[t.date].pnl += t.pnl;
-    dayMap[t.date].count += 1;
-    dayMap[t.date].byCurrency[cur] = (dayMap[t.date].byCurrency[cur] || 0) + t.pnl;
+
+    // 마지막 청산 날짜 추출
+    let dateKey = t.date; // 기본값: 진입일
+    if (t.exits && t.exits.length > 0) {
+      const lastExit = t.exits[t.exits.length - 1];
+      if (lastExit.date) dateKey = lastExit.date;
+    }
+    if (!dateKey) return;
+    if (!dayMap[dateKey]) dayMap[dateKey] = { pnl: 0, count: 0, byCurrency: {} };
+    dayMap[dateKey].pnl += t.pnl;
+    dayMap[dateKey].count += 1;
+    dayMap[dateKey].byCurrency[cur] = (dayMap[dateKey].byCurrency[cur] || 0) + t.pnl;
   });
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -1303,7 +1313,16 @@ function StatsTab({ trades }) {
   const wins = closedTrades.filter(t => t.pnl > 0);
   const losses = closedTrades.filter(t => t.pnl < 0);
   const monthly = {};
-  trades.forEach(t => { const m = t.date && t.date.substring(0, 7); if (m) monthly[m] = (monthly[m] || 0) + t.pnl; });
+  closedTrades.forEach(t => {
+    if (!t.pnl || t.pnl === 0) return;
+    // 마지막 청산일 기준
+    let dateKey = t.date;
+    if (t.exits && t.exits.length > 0 && t.exits[t.exits.length - 1].date) {
+      dateKey = t.exits[t.exits.length - 1].date;
+    }
+    const m = dateKey && dateKey.substring(0, 7);
+    if (m) monthly[m] = (monthly[m] || 0) + t.pnl;
+  });
   const monthData = Object.keys(monthly).sort().map(k => ({ month: k.substring(5), pnl: Math.round(monthly[k]) }));
   const emotionMap = {};
   closedTrades.forEach(t => { if (!t.emotion) return; if (!emotionMap[t.emotion]) emotionMap[t.emotion] = { w: 0, total: 0 }; emotionMap[t.emotion].total++; if (t.pnl > 0) emotionMap[t.emotion].w++; });
