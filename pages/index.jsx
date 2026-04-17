@@ -1216,14 +1216,17 @@ function CalendarHeatmap({ trades }) {
   const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
   const mk = year + "-" + String(month + 1).padStart(2, "0");
 
-  // 이달 통화별 손익
+  // 이달 통화별 손익 — 청산일 기준
   const monthByCurrency = {};
-  trades.filter(t => t.date && t.date.startsWith(mk)).forEach(t => {
-    const cur = t.currency || "₩";
-    monthByCurrency[cur] = (monthByCurrency[cur] || 0) + t.pnl;
+  let monthDays = 0, monthCount = 0;
+  Object.entries(dayMap).forEach(([date, dd]) => {
+    if (!date.startsWith(mk)) return;
+    monthDays++;
+    monthCount += dd.count;
+    Object.entries(dd.byCurrency).forEach(([cur, val]) => {
+      monthByCurrency[cur] = (monthByCurrency[cur] || 0) + val;
+    });
   });
-  const monthDays = Object.keys(dayMap).filter(d => d.startsWith(mk)).length;
-  const monthCount = Object.entries(dayMap).filter(([d]) => d.startsWith(mk)).reduce((a, [, v]) => a + v.count, 0);
   const prevM = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextM = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
   const cells = [];
