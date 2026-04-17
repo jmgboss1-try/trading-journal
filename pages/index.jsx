@@ -407,6 +407,7 @@ export default function App() {
           {tab === "record" && <RecordTab onAdd={addTrade} strategies={strategies} activeAssets={activeAssets} />}
           {tab === "history" && <HistoryTab trades={trades} onDelete={deleteTrade} onEdit={editTrade} setModal={setModal} activeAssets={activeAssets} />}
           {tab === "cashflow" && <CashflowTab cashflows={cashflows} trades={trades} onAdd={addCashflow} onDelete={deleteCashflow} activeAssets={activeAssets} />}
+          {tab === "stats" && <StatsTab trades={trades} />}
           {tab === "ai" && <AITab trades={trades} />}
           {tab === "settings" && <SettingsTab trades={trades} capitals={capitals} strategies={strategies} onSaveStrategies={saveStrategies} activeAssets={activeAssets} onSaveActiveAssets={saveActiveAssets} onExportJSON={exportJSON} onExportCSV={exportCSV} onImport={() => importRef.current.click()} onSetCapital={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} onClearAll={async () => { await saveTrades([]); setCapitals({}); try { await saveData("capitals", "{}"); } catch(e) {} }} />}
         </div>
