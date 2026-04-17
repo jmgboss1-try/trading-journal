@@ -1448,13 +1448,14 @@ function StatsTab({ trades, krwRate, showKrwMode }) {
   const monthly = {};
   closedTrades.forEach(t => {
     if (!t.pnl || t.pnl === 0) return;
-    // 마지막 청산일 기준
     let dateKey = t.date;
     if (t.exits && t.exits.length > 0 && t.exits[t.exits.length - 1].date) {
       dateKey = t.exits[t.exits.length - 1].date;
     }
     const m = dateKey && dateKey.substring(0, 7);
-    if (m) monthly[m] = (monthly[m] || 0) + t.pnl;
+    // 월별 차트는 항상 원화 환산으로 합산 (다통화 비교 가능)
+    const krwPnl = toKrwVal(t.pnl, t.currency || "₩");
+    if (m) monthly[m] = (monthly[m] || 0) + krwPnl;
   });
   const monthData = Object.keys(monthly).sort().map(k => ({ month: k.substring(5), pnl: Math.round(monthly[k]) }));
   const emotionMap = {};
@@ -1462,9 +1463,12 @@ function StatsTab({ trades, krwRate, showKrwMode }) {
   const emotionData = Object.entries(emotionMap).map(([name, e]) => ({ name, wr: Math.round(e.w / e.total * 100), total: e.total })).sort((a, b) => b.wr - a.wr);
   const assetMap = {};
   closedTrades.forEach(t => { if (!assetMap[t.assetKey]) assetMap[t.assetKey] = { trades: [], wins: 0 }; assetMap[t.assetKey].trades.push(t); if (t.pnl > 0) assetMap[t.assetKey].wins++; });
+  // 원화 환산 헬퍼
+  const toKrwVal = (pnl, cur) => pnl * (cur === "₩" ? 1 : (krwRate?.[cur] || 1380));
   const avgPct = closedTrades.length ? closedTrades.reduce((a, t) => a + t.pct, 0) / closedTrades.length : 0;
-  const maxWin = wins.length ? wins.reduce((a, t) => t.pnl > a.pnl ? t : a) : null;
-  const maxLoss = losses.length ? losses.reduce((a, t) => t.pnl < a.pnl ? t : a) : null;
+  // 최대 수익/손실: 원화 환산 기준으로 비교
+  const maxWin = wins.length ? wins.reduce((a, t) => toKrwVal(t.pnl, t.currency || "₩") > toKrwVal(a.pnl, a.currency || "₩") ? t : a) : null;
+  const maxLoss = losses.length ? losses.reduce((a, t) => toKrwVal(t.pnl, t.currency || "₩") < toKrwVal(a.pnl, a.currency || "₩") ? t : a) : null;
 
   // 백테스팅 통계
   const btTrades = trades.filter(t => t.slType || t.entryZone);
@@ -1491,8 +1495,14 @@ function StatsTab({ trades, krwRate, showKrwMode }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 14, animation: "fadeIn 0.3s ease" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}><StatCard label="청산 거래" value={closedTrades.length} /><StatCard label="수익" value={wins.length} color={s.green} /><StatCard label="손실" value={losses.length} color={s.red} /></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <StatCard label="최대 수익" value={maxWin ? fmt(maxWin.pnl, maxWin.currency) : "-"} color={s.green} />
-        <StatCard label="최대 손실" value={maxLoss ? fmt(maxLoss.pnl, maxLoss.currency) : "-"} color={s.red} />
+        <StatCard label="최대 수익"
+          value={maxWin ? (showKrwMode ? fmt(Math.round(toKrwVal(maxWin.pnl, maxWin.currency || "₩")), "₩") : fmt(maxWin.pnl, maxWin.currency)) : "-"}
+          sub={maxWin ? maxWin.symbol : ""}
+          color={s.green} />
+        <StatCard label="최대 손실"
+          value={maxLoss ? (showKrwMode ? fmt(Math.round(toKrwVal(maxLoss.pnl, maxLoss.currency || "₩")), "₩") : fmt(maxLoss.pnl, maxLoss.currency)) : "-"}
+          sub={maxLoss ? maxLoss.symbol : ""}
+          color={s.red} />
         <StatCard label="평균 수익률" value={fmtPct(avgPct)} color={avgPct >= 0 ? s.green : s.red} />
       </div>
       <CalendarHeatmap trades={trades} krwRate={krwRate} showKrwMode={showKrwMode} />
