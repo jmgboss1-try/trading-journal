@@ -464,7 +464,8 @@ function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency,
   // 계좌별 손익 집계 (통화별) - 활성화된 자산만
   const accountStats = visibleAccounts.map(a => {
     const acTrades = trades.filter(t => t.assetKey === a.key);
-    const acWins = acTrades.filter(t => t.pnl > 0).length;
+    const acClosed = acTrades.filter(t => t.status === "청산" || t.status === "부분청산" || (t.status !== "홀딩" && t.pnl !== 0));
+    const acWins = acClosed.filter(t => t.pnl > 0).length;
     const capRaw = capitals[a.key];
     const capInfo = capRaw ? (typeof capRaw === "object" ? capRaw : { amount: capRaw, currency: "₩" }) : null;
     const capAmount = capInfo ? capInfo.amount : 0;
@@ -475,7 +476,7 @@ function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency,
       return acc;
     }, {});
     const capPnl = pnlByCur[capCur] || 0;
-    return { ...a, trades: acTrades.length, pnlByCur, wins: acWins, capital: capAmount, capitalCur: capCur, current: capAmount + capPnl, returnPct: capAmount > 0 ? (capPnl / capAmount * 100) : null };
+    return { ...a, trades: acTrades.length, closed: acClosed.length, pnlByCur, wins: acWins, capital: capAmount, capitalCur: capCur, current: capAmount + capPnl, returnPct: capAmount > 0 ? (capPnl / capAmount * 100) : null };
   }).filter(a => a.trades > 0 || a.capital > 0);
 
   return (
@@ -543,7 +544,7 @@ function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency,
                   </div>
                   <div style={{ padding: "4px 14px" }}>
                     <div style={{ fontSize: 10, color: s.muted }}>승률</div>
-                    <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, marginTop: 2, color: a.trades > 0 ? (Math.round(a.wins / a.trades * 100) >= 50 ? s.green : s.red) : s.muted }}>{a.trades > 0 ? Math.round(a.wins / a.trades * 100) + "%" : "-"}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, marginTop: 2, color: a.closed > 0 ? (Math.round(a.wins / a.closed * 100) >= 50 ? s.green : s.red) : s.muted }}>{a.closed > 0 ? Math.round(a.wins / a.closed * 100) + "%" : "-"}</div>
                   </div>
                 </div>
               </div>
