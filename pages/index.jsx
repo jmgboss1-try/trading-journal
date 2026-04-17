@@ -1445,6 +1445,10 @@ function StatsTab({ trades, krwRate, showKrwMode }) {
   const closedTrades = trades.filter(t => t.status === "청산" || t.status === "부분청산" || (t.status !== "홀딩" && t.pnl !== 0));
   const wins = closedTrades.filter(t => t.pnl > 0);
   const losses = closedTrades.filter(t => t.pnl < 0);
+
+  // 원화 환산 헬퍼 - 먼저 정의
+  const toKrwVal = (pnl, cur) => pnl * (cur === "₩" ? 1 : (krwRate?.[cur] || 1380));
+
   const monthly = {};
   closedTrades.forEach(t => {
     if (!t.pnl || t.pnl === 0) return;
@@ -1453,7 +1457,6 @@ function StatsTab({ trades, krwRate, showKrwMode }) {
       dateKey = t.exits[t.exits.length - 1].date;
     }
     const m = dateKey && dateKey.substring(0, 7);
-    // 월별 차트는 항상 원화 환산으로 합산 (다통화 비교 가능)
     const krwPnl = toKrwVal(t.pnl, t.currency || "₩");
     if (m) monthly[m] = (monthly[m] || 0) + krwPnl;
   });
@@ -1463,10 +1466,7 @@ function StatsTab({ trades, krwRate, showKrwMode }) {
   const emotionData = Object.entries(emotionMap).map(([name, e]) => ({ name, wr: Math.round(e.w / e.total * 100), total: e.total })).sort((a, b) => b.wr - a.wr);
   const assetMap = {};
   closedTrades.forEach(t => { if (!assetMap[t.assetKey]) assetMap[t.assetKey] = { trades: [], wins: 0 }; assetMap[t.assetKey].trades.push(t); if (t.pnl > 0) assetMap[t.assetKey].wins++; });
-  // 원화 환산 헬퍼
-  const toKrwVal = (pnl, cur) => pnl * (cur === "₩" ? 1 : (krwRate?.[cur] || 1380));
   const avgPct = closedTrades.length ? closedTrades.reduce((a, t) => a + t.pct, 0) / closedTrades.length : 0;
-  // 최대 수익/손실: 원화 환산 기준으로 비교
   const maxWin = wins.length ? wins.reduce((a, t) => toKrwVal(t.pnl, t.currency || "₩") > toKrwVal(a.pnl, a.currency || "₩") ? t : a) : null;
   const maxLoss = losses.length ? losses.reduce((a, t) => toKrwVal(t.pnl, t.currency || "₩") < toKrwVal(a.pnl, a.currency || "₩") ? t : a) : null;
 
