@@ -163,6 +163,23 @@ export default function App() {
   const [capDrafts, setCapDrafts] = useState({});
   const [modal, setModal] = useState(null);
   const [loaded, setLoaded] = useState(false);
+  const [krwRate, setKrwRate] = useState({ USD: 1380, USDT: 1380 }); // 기본값
+  const [showKrwMode, setShowKrwMode] = useState(false);
+
+  // 환율 자동 로딩
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const res = await fetch("https://open.er-api.com/v6/latest/USD");
+        const data = await res.json();
+        if (data.rates && data.rates.KRW) {
+          const rate = Math.round(data.rates.KRW);
+          setKrwRate({ USD: rate, USDT: rate });
+        }
+      } catch (e) {}
+    };
+    fetchRate();
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -319,8 +336,17 @@ export default function App() {
             {Object.keys(pnlByCurrency).length === 0 ? (
               <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, color: s.muted }}>+0₩</div>
             ) : Object.entries(pnlByCurrency).map(([cur, val]) => (
-              <div key={cur} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 15, fontWeight: 700, color: val >= 0 ? s.green : s.red }}>{fmt(val, cur)}</div>
+              <div key={cur} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 15, fontWeight: 700, color: val >= 0 ? s.green : s.red }}>
+                {showKrwMode
+                  ? fmt(Math.round(val * (cur === "₩" ? 1 : krwRate[cur] || 1380)), "₩")
+                  : fmt(val, cur)}
+              </div>
             ))}
+            {showKrwMode && Object.keys(pnlByCurrency).length > 1 && (
+              <div style={{ fontSize: 11, color: s.muted, marginTop: 2 }}>
+                합계: {fmt(Math.round(Object.entries(pnlByCurrency).reduce((a, [c, v]) => a + v * (c === "₩" ? 1 : krwRate[c] || 1380), 0)), "₩")}
+              </div>
+            )}
             <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>승률 <span style={{ color: wr >= 50 ? s.green : s.red, fontWeight: 600 }}>{wr}%</span> · {closedTrades.length}건 청산</div>
           </div>
         </div>
@@ -341,7 +367,12 @@ export default function App() {
           ))}
         </div>
 
-        <div style={{ padding: "16px 20px", borderTop: "1px solid " + s.border }}>
+        <div style={{ padding: "16px 20px", borderTop: "1px solid " + s.border, display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* 원화 환산 토글 */}
+          <button onClick={() => setShowKrwMode(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: showKrwMode ? "rgba(0,229,255,0.08)" : "none", border: "1px solid " + (showKrwMode ? s.accent : s.border), borderRadius: 8, color: showKrwMode ? s.accent : s.muted, padding: "8px 12px", cursor: "pointer", fontSize: 12, width: "100%", fontFamily: "'Noto Sans KR', sans-serif" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>💱 원화 환산 보기</span>
+            <span style={{ fontSize: 10, opacity: 0.7 }}>1USD≈{krwRate.USD?.toLocaleString()}₩</span>
+          </button>
           <button onClick={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }}
             style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "1px solid " + s.border, borderRadius: 8, color: s.muted, padding: "8px 12px", cursor: "pointer", fontSize: 13, width: "100%", fontFamily: "'Noto Sans KR', sans-serif" }}>
             <Settings size={14} /> 계좌 원금 설정
@@ -404,11 +435,11 @@ export default function App() {
         )}
 
         <div className="main-content">
-          {tab === "dashboard" && <DashboardTab trades={trades} setModal={setModal} capitals={capitals} totalCapital={totalCapital} pnlByCurrency={pnlByCurrency} activeAssets={activeAssets} onSetCapital={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} />}
+          {tab === "dashboard" && <DashboardTab trades={trades} setModal={setModal} capitals={capitals} totalCapital={totalCapital} pnlByCurrency={pnlByCurrency} activeAssets={activeAssets} krwRate={krwRate} showKrwMode={showKrwMode} onSetCapital={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} />}
           {tab === "record" && <RecordTab onAdd={addTrade} strategies={strategies} activeAssets={activeAssets} />}
           {tab === "history" && <HistoryTab trades={trades} onDelete={deleteTrade} onEdit={editTrade} setModal={setModal} activeAssets={activeAssets} />}
           {tab === "cashflow" && <CashflowTab cashflows={cashflows} trades={trades} onAdd={addCashflow} onDelete={deleteCashflow} activeAssets={activeAssets} />}
-          {tab === "stats" && <StatsTab trades={trades} />}
+          {tab === "stats" && <StatsTab trades={trades} krwRate={krwRate} showKrwMode={showKrwMode} />}
           {tab === "ai" && <AITab trades={trades} />}
           {tab === "settings" && <SettingsTab trades={trades} capitals={capitals} strategies={strategies} onSaveStrategies={saveStrategies} activeAssets={activeAssets} onSaveActiveAssets={saveActiveAssets} onExportJSON={exportJSON} onExportCSV={exportCSV} onImport={() => importRef.current.click()} onSetCapital={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} onClearAll={async () => { await saveTrades([]); setCapitals({}); try { await saveData("capitals", "{}"); } catch(e) {} }} />}
         </div>
@@ -1189,7 +1220,7 @@ function EditTradeForm({ trade, onSave, onCancel }) {
   );
 }
 
-function CalendarHeatmap({ trades }) {
+function CalendarHeatmap({ trades, krwRate, showKrwMode }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -1234,12 +1265,17 @@ function CalendarHeatmap({ trades }) {
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
-  // 숫자 축약: 10000 → 1만, 1000000 → 100만
+  // 숫자 축약 (원화 환산 포함)
+  const toKrw = (val, cur) => val * (cur === "₩" ? 1 : (krwRate?.[cur] || 1380));
   const fmtShort = (val, cur) => {
-    const abs = Math.abs(val);
-    const sign = val >= 0 ? "+" : "-";
-    if (cur === "₩") {
-      if (abs >= 1000000) return sign + (abs / 1000000).toFixed(1).replace(/\.0$/, "") + "만만";
+    const v = showKrwMode ? toKrw(val, cur) : val;
+    const c = showKrwMode ? "₩" : cur;
+    const abs = Math.abs(v);
+    const sign = v >= 0 ? "+" : "-";
+    if (c === "₩") {
+      if (abs >= 100000000) return sign + (abs / 100000000).toFixed(1).replace(/\.0$/, "") + "억";
+      if (abs >= 10000000) return sign + (abs / 10000000).toFixed(1).replace(/\.0$/, "") + "천만";
+      if (abs >= 1000000) return sign + (abs / 1000000).toFixed(1).replace(/\.0$/, "") + "백만";
       if (abs >= 10000) return sign + Math.round(abs / 10000) + "만";
       if (abs >= 1000) return sign + (abs / 1000).toFixed(1).replace(/\.0$/, "") + "천";
       return sign + Math.round(abs);
@@ -1258,7 +1294,11 @@ function CalendarHeatmap({ trades }) {
             <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700 }}>{year}년 {month + 1}월</div>
             {Object.keys(monthByCurrency).length > 0 && (
               <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
-                {Object.entries(monthByCurrency).map(([cur, val]) => (
+                {showKrwMode ? (
+                  <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, color: Object.entries(monthByCurrency).reduce((a, [c, v]) => a + toKrw(v, c), 0) >= 0 ? s.green : s.red }}>
+                    {fmt(Math.round(Object.entries(monthByCurrency).reduce((a, [c, v]) => a + toKrw(v, c), 0)), "₩")}
+                  </span>
+                ) : Object.entries(monthByCurrency).map(([cur, val]) => (
                   <span key={cur} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, color: val >= 0 ? s.green : s.red }}>{fmt(val, cur)}</span>
                 ))}
               </div>
@@ -1312,7 +1352,7 @@ function CalendarHeatmap({ trades }) {
   );
 }
 
-function StatsTab({ trades }) {
+function StatsTab({ trades, krwRate, showKrwMode }) {
   const closedTrades = trades.filter(t => t.status === "청산" || t.status === "부분청산" || (t.status !== "홀딩" && t.pnl !== 0));
   const wins = closedTrades.filter(t => t.pnl > 0);
   const losses = closedTrades.filter(t => t.pnl < 0);
@@ -1366,7 +1406,7 @@ function StatsTab({ trades }) {
         <StatCard label="최대 손실" value={maxLoss ? fmt(maxLoss.pnl, maxLoss.currency) : "-"} color={s.red} />
         <StatCard label="평균 수익률" value={fmtPct(avgPct)} color={avgPct >= 0 ? s.green : s.red} />
       </div>
-      <CalendarHeatmap trades={trades} />
+      <CalendarHeatmap trades={trades} krwRate={krwRate} showKrwMode={showKrwMode} />
       {monthData.length > 0 && <Card><div style={{ fontSize: 11, color: s.muted, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><BarChart2 size={13} /> 월별 손익</div><ResponsiveContainer width="100%" height={160}><BarChart data={monthData}><XAxis dataKey="month" tick={{ fill: s.muted, fontSize: 11 }} /><YAxis hide /><Tooltip contentStyle={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 8, fontSize: 12, color: s.text }} itemStyle={{ color: s.text }} labelStyle={{ color: s.muted }} formatter={(v) => [fmt(v), "손익"]} /><Bar dataKey="pnl" radius={[4, 4, 0, 0]}>{monthData.map((d, i) => <Cell key={i} fill={d.pnl >= 0 ? "rgba(0,230,118,0.7)" : "rgba(255,61,113,0.7)"} />)}</Bar></BarChart></ResponsiveContainer></Card>}
       {emotionData.length > 0 && <Card><div style={{ fontSize: 11, color: s.muted, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><Brain size={13} /> 감정별 승률</div><div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{emotionData.map(e => <div key={e.name}><div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span>{e.name} <span style={{ color: s.muted }}>({e.total}건)</span></span><span style={{ fontFamily: "'JetBrains Mono',monospace", color: e.wr >= 50 ? s.green : s.red }}>{e.wr}%</span></div><div style={{ height: 6, background: s.surface2, borderRadius: 3, overflow: "hidden" }}><div style={{ height: "100%", width: e.wr + "%", background: e.wr >= 50 ? s.green : s.red, borderRadius: 3 }} /></div></div>)}</div></Card>}
       {Object.keys(assetMap).length > 0 && (
