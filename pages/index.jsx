@@ -205,14 +205,23 @@ export default function App() {
   });
 
   // 테마 전역 동기화
-  const theme = isDark ? DARK_THEME : LIGHT_THEME;
-  Object.assign(s, theme);
-  const css = isDark ? DARK_CSS : LIGHT_CSS;
+  Object.assign(s, isDark ? DARK_THEME : LIGHT_THEME);
 
-  const toggleTheme = () => {
-    localStorage.setItem("theme", isDark ? "light" : "dark");
-    window.location.reload();
-  };
+  // CSS를 DOM에 직접 주입 (새로고침 없이 즉시 전환)
+  useEffect(() => {
+    let styleEl = document.getElementById("app-theme-style");
+    if (!styleEl) {
+      styleEl = document.createElement("style");
+      styleEl.id = "app-theme-style";
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = isDark ? DARK_CSS : LIGHT_CSS;
+    document.body.style.background = isDark ? "#09090f" : "#f5f5fa";
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+  }, [isDark]);
+
+  const toggleTheme = () => setIsDark(v => !v);
+  const css = "";
 
   // 환율 자동 로딩
   useEffect(() => {
@@ -374,7 +383,7 @@ export default function App() {
 
   if (!loaded) return (
     <div style={{ background: s.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
-      <style>{css}</style>
+      
       <div style={{ width: 32, height: 32, border: "3px solid " + s.border, borderTopColor: s.accent, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
       <div style={{ color: s.muted, fontSize: 13 }}>데이터 불러오는 중...</div>
     </div>
@@ -382,7 +391,7 @@ export default function App() {
 
   return (
     <div className="app-root" style={{ background: s.bg, minHeight: "100vh", color: s.text, fontFamily: "'Noto Sans KR', sans-serif", display: "flex" }}>
-      <style>{css}</style>
+      
       <div className="sidebar">
         <div style={{ padding: "0 20px 24px", borderBottom: "1px solid " + s.border, marginBottom: 8 }}>
           <div style={{ fontSize: 20, fontWeight: 700, color: s.text, marginBottom: 16 }}>매매일지</div>
