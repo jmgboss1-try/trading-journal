@@ -1478,10 +1478,11 @@ function CalendarHeatmap({ trades, krwRate, showKrwMode }) {
           const dd = dayMap[ds];
           const isToday = ds === todayStr();
           const hasTrade = !!dd;
-          const isProfit = dd && dd.pnl > 0;
-          const isLoss = dd && dd.pnl < 0;
 
-          // 통화별 주요 손익 (가장 큰 절대값)
+          // KRW 모드일 때는 모든 통화 합산, 아닐 때는 최대 통화 1개
+          const krwTotal = dd ? Object.entries(dd.byCurrency).reduce((a, [c, v]) => a + toKrw(v, c), 0) : 0;
+          const isProfit = dd && (showKrwMode ? krwTotal > 0 : dd.pnl > 0);
+          const isLoss = dd && (showKrwMode ? krwTotal < 0 : dd.pnl < 0);
           const mainCur = dd ? Object.entries(dd.byCurrency).reduce((a, b) => Math.abs(b[1]) > Math.abs(a[1]) ? b : a, ["₩", 0]) : null;
 
           return (
@@ -1494,7 +1495,7 @@ function CalendarHeatmap({ trades, krwRate, showKrwMode }) {
               <span style={{ fontSize: 11, color: isToday ? s.accent : hasTrade ? s.text : s.muted, fontWeight: isToday ? 700 : 400 }}>{day}</span>
               {mainCur && mainCur[0] && (
                 <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 700, color: isProfit ? s.green : s.red, lineHeight: 1.2, wordBreak: "break-all" }}>
-                  {fmtShort(mainCur[1], mainCur[0])}
+                  {showKrwMode ? fmtShort(krwTotal, "₩") : fmtShort(mainCur[1], mainCur[0])}
                 </span>
               )}
             </div>
