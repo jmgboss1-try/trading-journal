@@ -419,6 +419,7 @@ export default function App() {
           </button>
           <button onClick={() => setIsDark(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "none", border: "1px solid " + s.border, borderRadius: 8, color: s.muted, padding: "8px 12px", cursor: "pointer", fontSize: 12, width: "100%", fontFamily: "'Noto Sans KR', sans-serif" }}>
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>{isDark ? "☀️ 라이트 모드" : "🌙 다크 모드"}</span>
+          </button>
           <button onClick={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }}
             style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "1px solid " + s.border, borderRadius: 8, color: s.muted, padding: "8px 12px", cursor: "pointer", fontSize: 13, width: "100%", fontFamily: "'Noto Sans KR', sans-serif" }}>
             <Settings size={14} /> 계좌 원금 설정
