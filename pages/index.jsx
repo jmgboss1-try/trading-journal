@@ -197,12 +197,22 @@ export default function App() {
   const [krwRate, setKrwRate] = useState({ USD: 1380, USDT: 1380 }); // 기본값
   const [showKrwMode, setShowKrwMode] = useState(false);
   const [tickerCodes, setTickerCodes] = useState({}); // { "후성": "005180" }
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("theme") !== "light";
+    }
+    return true;
+  });
 
   // 테마 전역 동기화
   const theme = isDark ? DARK_THEME : LIGHT_THEME;
   Object.assign(s, theme);
   const css = isDark ? DARK_CSS : LIGHT_CSS;
+
+  const toggleTheme = () => {
+    localStorage.setItem("theme", isDark ? "light" : "dark");
+    window.location.reload();
+  };
 
   // 환율 자동 로딩
   useEffect(() => {
@@ -417,7 +427,7 @@ export default function App() {
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>💱 원화 환산 보기</span>
             <span style={{ fontSize: 10, opacity: 0.7 }}>1USD≈{krwRate.USD?.toLocaleString()}₩</span>
           </button>
-          <button onClick={() => setIsDark(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "none", border: "1px solid " + s.border, borderRadius: 8, color: s.muted, padding: "8px 12px", cursor: "pointer", fontSize: 12, width: "100%", fontFamily: "'Noto Sans KR', sans-serif" }}>
+          <button onClick={toggleTheme} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "none", border: "1px solid " + s.border, borderRadius: 8, color: s.muted, padding: "8px 12px", cursor: "pointer", fontSize: 12, width: "100%", fontFamily: "'Noto Sans KR', sans-serif" }}>
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>{isDark ? "☀️ 라이트 모드" : "🌙 다크 모드"}</span>
           </button>
           <button onClick={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }}
@@ -439,7 +449,7 @@ export default function App() {
           ) : Object.entries(pnlByCurrency).map(([cur, val]) => (
             <div key={cur} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: val >= 0 ? s.green : s.red, fontWeight: 600 }}>{fmt(val, cur)}</div>
           ))}
-          <button onClick={() => setIsDark(v => !v)} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 10px", cursor: "pointer", color: s.muted, display: "flex", alignItems: "center", fontSize: 14 }}>{isDark ? "☀️" : "🌙"}</button>
+          <button onClick={toggleTheme} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 10px", cursor: "pointer", color: s.muted, display: "flex", alignItems: "center", fontSize: 14 }}>{isDark ? "☀️" : "🌙"}</button>
           <button onClick={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 10px", cursor: "pointer", color: s.muted, display: "flex", alignItems: "center" }}><Settings size={12} /></button>
         </div>
       </div>
