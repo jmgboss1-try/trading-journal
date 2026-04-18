@@ -392,7 +392,7 @@ export default function App() {
   return (
     <div className="app-root" style={{ background: s.bg, minHeight: "100vh", color: s.text, fontFamily: "'Noto Sans KR', sans-serif", display: "flex" }}>
       
-      <div className="sidebar">
+      <div className="sidebar" key={"sb-" + String(isDark)}>
         <div style={{ padding: "0 20px 24px", borderBottom: "1px solid " + s.border, marginBottom: 8 }}>
           <div style={{ fontSize: 20, fontWeight: 700, color: s.text, marginBottom: 16 }}>매매일지</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -433,15 +433,15 @@ export default function App() {
         <div style={{ padding: "16px 20px", borderTop: "1px solid " + s.border, display: "flex", flexDirection: "column", gap: 8 }}>
           {/* 원화 환산 토글 */}
           <button onClick={() => setShowKrwMode(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: showKrwMode ? "rgba(0,229,255,0.08)" : "none", border: "1px solid " + (showKrwMode ? s.accent : s.border), borderRadius: 8, color: showKrwMode ? s.accent : s.muted, padding: "8px 12px", cursor: "pointer", fontSize: 12, width: "100%", fontFamily: "'Noto Sans KR', sans-serif" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>💱 원화 환산 보기</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>$ ⇄ ₩</span>
             <span style={{ fontSize: 10, opacity: 0.7 }}>1USD≈{krwRate.USD?.toLocaleString()}₩</span>
           </button>
           <button onClick={toggleTheme} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "none", border: "1px solid " + s.border, borderRadius: 8, color: s.muted, padding: "8px 12px", cursor: "pointer", fontSize: 12, width: "100%", fontFamily: "'Noto Sans KR', sans-serif" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>{isDark ? "☀️ 라이트 모드" : "🌙 다크 모드"}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 16 }}>{isDark ? "◌" : "◉"}</span>{isDark ? "라이트 모드" : "다크 모드"}</span>
           </button>
           <button onClick={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }}
             style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "1px solid " + s.border, borderRadius: 8, color: s.muted, padding: "8px 12px", cursor: "pointer", fontSize: 13, width: "100%", fontFamily: "'Noto Sans KR', sans-serif" }}>
-            <Settings size={14} /> 계좌 원금 설정
+            <span style={{ fontSize: 16 }}>≡</span> 계좌 원금 설정
           </button>
         </div>
       </div>
@@ -449,17 +449,21 @@ export default function App() {
       {/* 모바일 상단 헤더 */}
       <div className="top-header" style={{ background: s.surface, borderBottom: "1px solid " + s.border, padding: "12px 16px", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, width: "100%" }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: s.text }}>매매일지</div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <div style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 10px", fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
             <span style={{ color: s.muted }}>승률 </span><span style={{ color: wr >= 50 ? s.green : s.red, fontWeight: 600 }}>{wr}%</span>
           </div>
           {Object.keys(pnlByCurrency).length === 0 ? (
-            <div style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: s.muted }}>+0₩</div>
+            <div style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 10px", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: s.muted }}>+0₩</div>
           ) : Object.entries(pnlByCurrency).map(([cur, val]) => (
-            <div key={cur} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: val >= 0 ? s.green : s.red, fontWeight: 600 }}>{fmt(val, cur)}</div>
+            <div key={cur} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 10px", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: val >= 0 ? s.green : s.red, fontWeight: 600 }}>{fmt(val, cur)}</div>
           ))}
-          <button onClick={toggleTheme} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 10px", cursor: "pointer", color: s.muted, display: "flex", alignItems: "center", fontSize: 14 }}>{isDark ? "☀️" : "🌙"}</button>
-          <button onClick={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 10px", cursor: "pointer", color: s.muted, display: "flex", alignItems: "center" }}><Settings size={12} /></button>
+          {/* 원화환산 토글 */}
+          <button onClick={() => setShowKrwMode(v => !v)} style={{ background: showKrwMode ? "rgba(0,229,255,0.12)" : s.surface2, border: "1px solid " + (showKrwMode ? s.accent : s.border), borderRadius: 20, padding: "4px 10px", cursor: "pointer", color: showKrwMode ? s.accent : s.muted, display: "flex", alignItems: "center", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, letterSpacing: -0.5 }}>$ ⇄ ₩</button>
+          {/* 다크/라이트 토글 */}
+          <button onClick={toggleTheme} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 10px", cursor: "pointer", color: s.muted, display: "flex", alignItems: "center", fontSize: 15 }}>{isDark ? "◌" : "◉"}</button>
+          {/* 설정 */}
+          <button onClick={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 10px", cursor: "pointer", color: s.muted, display: "flex", alignItems: "center", fontSize: 16, lineHeight: 1 }}>≡</button>
         </div>
       </div>
 
@@ -501,7 +505,7 @@ export default function App() {
           </div>
         )}
 
-        <div className="main-content">
+        <div className="main-content" key={String(isDark)}>
           {tab === "dashboard" && <DashboardTab trades={trades} setModal={setModal} capitals={capitals} totalCapital={totalCapital} pnlByCurrency={pnlByCurrency} activeAssets={activeAssets} krwRate={krwRate} showKrwMode={showKrwMode} onSetCapital={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} />}
           {tab === "record" && <RecordTab onAdd={addTrade} strategies={strategies} activeAssets={activeAssets} />}
           {tab === "history" && <HistoryTab trades={trades} onDelete={deleteTrade} onEdit={editTrade} setModal={setModal} activeAssets={activeAssets} tickerCodes={tickerCodes} onSaveTickerCodes={saveTickerCodes} />}
