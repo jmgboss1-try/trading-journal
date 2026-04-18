@@ -47,7 +47,7 @@ const LIGHT_THEME = {
   green: "#00a855", red: "#e0284f", text: "#1a1a2e", muted: "#7777aa",
 };
 
-let s = DARK_THEME;
+let s = { ...DARK_THEME };
 
 const DARK_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
@@ -205,7 +205,7 @@ export default function App() {
   });
 
   // 테마 전역 동기화
-  Object.assign(s, isDark ? DARK_THEME : LIGHT_THEME);
+  Object.assign(s, isDark ? { ...DARK_THEME } : { ...LIGHT_THEME });
 
   // CSS를 DOM에 직접 주입 (새로고침 없이 즉시 전환)
   useEffect(() => {
