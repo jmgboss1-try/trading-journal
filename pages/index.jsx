@@ -35,13 +35,21 @@ function calcPct(entry, exit, dir, lev) {
   return dir === "숏" ? -raw : raw;
 }
 
-const s = {
+const DARK_THEME = {
   bg: "#09090f", surface: "#111118", surface2: "#1a1a25",
   border: "#2a2a3a", accent: "#00e5ff", accent3: "#ffe066",
   green: "#00e676", red: "#ff3d71", text: "#e8e8f0", muted: "#6b6b80",
 };
 
-const css = `
+const LIGHT_THEME = {
+  bg: "#f5f5fa", surface: "#ffffff", surface2: "#f0f0f7",
+  border: "#e0e0ea", accent: "#0099bb", accent3: "#cc9900",
+  green: "#00a855", red: "#e0284f", text: "#1a1a2e", muted: "#7777aa",
+};
+
+let s = DARK_THEME;
+
+const DARK_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { background: #09090f; margin: 0; }
@@ -54,14 +62,11 @@ const css = `
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   input[type=range] { -webkit-appearance: none; height: 4px; border-radius: 2px; padding: 0; border: none; }
   input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #00e5ff; cursor: pointer; }
-
-  /* PC 사이드바 */
   .sidebar { display: none; width: 0; }
   .bottom-nav { display: flex; }
   .main-content { padding: 16px; padding-bottom: 80px; width: 100%; }
   .top-header { display: flex; position: sticky; top: 0; z-index: 50; }
   .app-root { flex-direction: column; }
-
   @media (min-width: 1024px) {
     .app-root { flex-direction: row; }
     .sidebar { display: flex; flex-direction: column; width: 220px; min-height: 100vh; background: #111118; border-right: 1px solid #2a2a3a; position: fixed; top: 0; left: 0; z-index: 40; padding: 24px 0; }
@@ -70,10 +75,36 @@ const css = `
     .main-content { padding: 24px 32px; padding-bottom: 24px; width: calc(100% - 220px); margin-left: 220px; }
     .cal-cell { aspect-ratio: auto !important; height: 60px !important; }
   }
+  @media (min-width: 1440px) { .cal-cell { height: 80px !important; } }
+`;
 
-  @media (min-width: 1440px) {
-    .cal-cell { height: 80px !important; }
+const LIGHT_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { background: #f5f5fa; margin: 0; }
+  input, select, textarea { background: #ffffff; border: 1px solid #e0e0ea; color: #1a1a2e; font-family: 'Noto Sans KR', sans-serif; font-size: 14px; padding: 10px 14px; border-radius: 8px; outline: none; width: 100%; -webkit-appearance: none; appearance: none; }
+  input:focus, select:focus, textarea:focus { border-color: #0099bb; box-shadow: 0 0 0 3px rgba(0,153,187,0.15); }
+  textarea { resize: vertical; min-height: 80px; }
+  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237777aa' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: #e0e0ea; border-radius: 2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  input[type=range] { -webkit-appearance: none; height: 4px; border-radius: 2px; padding: 0; border: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #0099bb; cursor: pointer; }
+  .sidebar { display: none; width: 0; }
+  .bottom-nav { display: flex; }
+  .main-content { padding: 16px; padding-bottom: 80px; width: 100%; }
+  .top-header { display: flex; position: sticky; top: 0; z-index: 50; }
+  .app-root { flex-direction: column; }
+  @media (min-width: 1024px) {
+    .app-root { flex-direction: row; }
+    .sidebar { display: flex; flex-direction: column; width: 220px; min-height: 100vh; background: #ffffff; border-right: 1px solid #e0e0ea; position: fixed; top: 0; left: 0; z-index: 40; padding: 24px 0; }
+    .bottom-nav { display: none; }
+    .top-header { display: none; }
+    .main-content { padding: 24px 32px; padding-bottom: 24px; width: calc(100% - 220px); margin-left: 220px; }
+    .cal-cell { aspect-ratio: auto !important; height: 60px !important; }
   }
+  @media (min-width: 1440px) { .cal-cell { height: 80px !important; } }
 `;
 
 function Card({ children, style, accent }) {
@@ -166,6 +197,12 @@ export default function App() {
   const [krwRate, setKrwRate] = useState({ USD: 1380, USDT: 1380 }); // 기본값
   const [showKrwMode, setShowKrwMode] = useState(false);
   const [tickerCodes, setTickerCodes] = useState({}); // { "후성": "005180" }
+  const [isDark, setIsDark] = useState(true);
+
+  // 테마 전역 동기화
+  const theme = isDark ? DARK_THEME : LIGHT_THEME;
+  Object.assign(s, theme);
+  const css = isDark ? DARK_CSS : LIGHT_CSS;
 
   // 환율 자동 로딩
   useEffect(() => {
@@ -380,6 +417,8 @@ export default function App() {
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>💱 원화 환산 보기</span>
             <span style={{ fontSize: 10, opacity: 0.7 }}>1USD≈{krwRate.USD?.toLocaleString()}₩</span>
           </button>
+          <button onClick={() => setIsDark(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "none", border: "1px solid " + s.border, borderRadius: 8, color: s.muted, padding: "8px 12px", cursor: "pointer", fontSize: 12, width: "100%", fontFamily: "'Noto Sans KR', sans-serif" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>{isDark ? "☀️ 라이트 모드" : "🌙 다크 모드"}</span>
           <button onClick={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }}
             style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "1px solid " + s.border, borderRadius: 8, color: s.muted, padding: "8px 12px", cursor: "pointer", fontSize: 13, width: "100%", fontFamily: "'Noto Sans KR', sans-serif" }}>
             <Settings size={14} /> 계좌 원금 설정
@@ -399,6 +438,7 @@ export default function App() {
           ) : Object.entries(pnlByCurrency).map(([cur, val]) => (
             <div key={cur} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: val >= 0 ? s.green : s.red, fontWeight: 600 }}>{fmt(val, cur)}</div>
           ))}
+          <button onClick={() => setIsDark(v => !v)} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 10px", cursor: "pointer", color: s.muted, display: "flex", alignItems: "center", fontSize: 14 }}>{isDark ? "☀️" : "🌙"}</button>
           <button onClick={() => { const drafts = {}; ACCOUNT_LIST.forEach(a => { const cap = capitals[a.key]; if (cap) { const info = typeof cap === "object" ? cap : { amount: cap, currency: "₩" }; drafts[a.key] = { amount: info.amount.toLocaleString("ko-KR"), currency: info.currency || "₩" }; } }); setCapDrafts(drafts); setShowCapInput(true); }} style={{ background: s.surface2, border: "1px solid " + s.border, borderRadius: 20, padding: "4px 10px", cursor: "pointer", color: s.muted, display: "flex", alignItems: "center" }}><Settings size={12} /></button>
         </div>
       </div>
