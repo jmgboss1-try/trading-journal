@@ -1483,7 +1483,6 @@ function CalendarHeatmap({ trades, krwRate, showKrwMode }) {
           const krwTotal = dd ? Object.entries(dd.byCurrency).reduce((a, [c, v]) => a + toKrw(v, c), 0) : 0;
           const isProfit = dd && (showKrwMode ? krwTotal > 0 : dd.pnl > 0);
           const isLoss = dd && (showKrwMode ? krwTotal < 0 : dd.pnl < 0);
-          const mainCur = dd ? Object.entries(dd.byCurrency).reduce((a, b) => Math.abs(b[1]) > Math.abs(a[1]) ? b : a, ["₩", 0]) : null;
 
           return (
             <div key={day} className="cal-cell" style={{
@@ -1493,11 +1492,49 @@ function CalendarHeatmap({ trades, krwRate, showKrwMode }) {
               padding: "4px 5px",
             }}>
               <span style={{ fontSize: 11, color: isToday ? s.accent : hasTrade ? s.text : s.muted, fontWeight: isToday ? 700 : 400 }}>{day}</span>
-              {mainCur && mainCur[0] && (
-                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 700, color: isProfit ? s.green : s.red, lineHeight: 1.2, wordBreak: "break-all" }}>
-                  {showKrwMode ? fmtShort(krwTotal, "₩") : fmtShort(mainCur[1], mainCur[0])}
-                </span>
-              )}
+{dd && (
+  <div
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "flex-start",
+      gap: 2,
+      lineHeight: 1.15,
+      width: "100%"
+    }}
+  >
+    {showKrwMode ? (
+      <span
+        style={{
+          fontFamily: "'JetBrains Mono',monospace",
+          fontSize: 11,
+          fontWeight: 700,
+          color: krwTotal >= 0 ? s.green : s.red,
+          wordBreak: "break-all"
+        }}
+      >
+        {fmtShort(krwTotal, "₩")}
+      </span>
+    ) : (
+      Object.entries(dd.byCurrency)
+        .filter(([_, val]) => val !== 0)
+        .map(([cur, val]) => (
+          <span
+            key={cur}
+            style={{
+              fontFamily: "'JetBrains Mono',monospace",
+              fontSize: 10,
+              fontWeight: 700,
+              color: val >= 0 ? s.green : s.red,
+              wordBreak: "break-all"
+            }}
+          >
+            {fmtShort(val, cur)}
+          </span>
+        ))
+    )}
+  </div>
+)}
             </div>
           );
         })}
