@@ -543,7 +543,7 @@ export default function App() {
   );
 }
 
-function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency, activeAssets, onSetCapital }) {
+function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency, activeAssets, onSetCapital, krwRate, showKrwMode }) {
   const visibleAccounts = ACCOUNT_LIST.filter(a => !activeAssets || activeAssets.includes(a.key));
   const total = trades.length;
   const closedTrades = trades.filter(t => t.status === "청산" || t.status === "부분청산" || (t.status !== "홀딩" && t.pnl !== 0));
@@ -558,12 +558,22 @@ function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency,
 
   const hasAnyCapital = Object.keys(capitals).length > 0;
 
+  // 환율 환산 헬퍼
+  const toRate = (val, fromCur, toCur) => {
+    if (fromCur === toCur) return val;
+    const r = krwRate || { USD: 1380, USDT: 1380 };
+    // fromCur → ₩ → toCur
+    const toKrw = fromCur === "₩" ? val : val * (r[fromCur] || 1380);
+    if (toCur === "₩") return toKrw;
+    return toKrw / (r[toCur] || 1380);
+  };
+
   // 파이차트 데이터
   const assetCountMap = {};
   trades.forEach(t => { assetCountMap[t.assetKey] = (assetCountMap[t.assetKey] || 0) + 1; });
   const pieData = Object.entries(assetCountMap).map(([name, value]) => ({ name, value }));
 
-  // 계좌별 손익 집계 (통화별) - 활성화된 자산만
+  // 계좌별 손익 집계 - 원금 통화 기준으로 자동 환산 합산
   const accountStats = visibleAccounts.map(a => {
     const acTrades = trades.filter(t => t.assetKey === a.key);
     const acClosed = acTrades.filter(t => t.status === "청산" || t.status === "부분청산" || (t.status !== "홀딩" && t.pnl !== 0));
@@ -572,13 +582,34 @@ function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency,
     const capInfo = capRaw ? (typeof capRaw === "object" ? capRaw : { amount: capRaw, currency: "₩" }) : null;
     const capAmount = capInfo ? capInfo.amount : 0;
     const capCur = capInfo ? (capInfo.currency || "₩") : "₩";
+
+    // 통화별 손익 원본
     const pnlByCur = acTrades.reduce((acc, t) => {
       const c = t.currency || "₩";
       acc[c] = (acc[c] || 0) + t.pnl;
       return acc;
     }, {});
-    const capPnl = pnlByCur[capCur] || 0;
-    return { ...a, trades: acTrades.length, closed: acClosed.length, pnlByCur, wins: acWins, capital: capAmount, capitalCur: capCur, current: capAmount + capPnl, returnPct: capAmount > 0 ? (capPnl / capAmount * 100) : null };
+
+    // 표시 통화 결정: showKrwMode면 ₩, 아니면 원금 통화
+    const displayCur = showKrwMode ? "₩" : capCur;
+
+    // 모든 통화 손익을 표시 통화로 환산 합산
+    const totalPnlInDisplay = Object.entries(pnlByCur).reduce((sum, [cur, val]) => {
+      return sum + toRate(val, cur, displayCur);
+    }, 0);
+
+    const totalPnlRounded = Math.round(totalPnlInDisplay * 100) / 100;
+    const currentVal = capAmount > 0 ? capAmount + toRate(totalPnlInDisplay, displayCur, capCur) : 0;
+    const returnPct = capAmount > 0 ? (toRate(totalPnlInDisplay, displayCur, capCur) / capAmount * 100) : null;
+
+    return {
+      ...a,
+      trades: acTrades.length, closed: acClosed.length, wins: acWins,
+      pnlByCur,
+      displayCur, totalPnlInDisplay: totalPnlRounded,
+      capital: capAmount, capitalCur: capCur,
+      current: currentVal, returnPct
+    };
   }).filter(a => a.trades > 0 || a.capital > 0);
 
   return (
@@ -629,9 +660,18 @@ function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency,
                     <span style={{ fontSize: 11, color: s.muted }}>{a.trades}건</span>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    {Object.entries(a.pnlByCur).map(([cur, val]) => (
-                      <div key={cur} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 15, fontWeight: 700, color: val >= 0 ? s.green : s.red }}>{fmt(Math.round(val * 100) / 100, cur)}</div>
-                    ))}
+                    {/* 환산된 합계 손익 표시 */}
+                    <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 15, fontWeight: 700, color: a.totalPnlInDisplay >= 0 ? s.green : s.red }}>
+                      {fmt(a.totalPnlInDisplay, a.displayCur)}
+                    </div>
+                    {/* 원금 통화와 다른 통화 손익이 있을 때 소계 표시 */}
+                    {!showKrwMode && Object.keys(a.pnlByCur).some(c => c !== a.capitalCur) && (
+                      <div style={{ fontSize: 10, color: s.muted, marginTop: 2 }}>
+                        {Object.entries(a.pnlByCur).map(([cur, val]) => (
+                          <span key={cur} style={{ marginLeft: 6 }}>{fmt(Math.round(val * 100) / 100, cur)}</span>
+                        ))}
+                      </div>
+                    )}
                     {a.returnPct !== null && <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: a.returnPct >= 0 ? s.green : s.red }}>{fmtPct(a.returnPct)}</div>}
                   </div>
                 </div>
@@ -641,8 +681,10 @@ function DashboardTab({ trades, setModal, capitals, totalCapital, pnlByCurrency,
                     <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, marginTop: 2 }}>{a.capital > 0 ? fmt(a.capital, a.capitalCur) : <span style={{ color: s.muted }}>-</span>}</div>
                   </div>
                   <div style={{ padding: "4px 14px", borderRight: "1px solid " + s.border }}>
-                    <div style={{ fontSize: 10, color: s.muted }}>현재</div>
-                    <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, marginTop: 2, color: a.capital > 0 ? (a.current >= a.capital ? s.green : s.red) : s.text }}>{a.capital > 0 ? fmt(a.current, a.capitalCur) : <span style={{ color: s.muted }}>-</span>}</div>
+                    <div style={{ fontSize: 10, color: s.muted }}>현재 ({a.capitalCur})</div>
+                    <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, marginTop: 2, color: a.capital > 0 ? (a.current >= a.capital ? s.green : s.red) : s.text }}>
+                      {a.capital > 0 ? fmt(Math.round(a.current * 100) / 100, a.capitalCur) : <span style={{ color: s.muted }}>-</span>}
+                    </div>
                   </div>
                   <div style={{ padding: "4px 14px" }}>
                     <div style={{ fontSize: 10, color: s.muted }}>승률</div>
@@ -1492,49 +1534,23 @@ function CalendarHeatmap({ trades, krwRate, showKrwMode }) {
               padding: "4px 5px",
             }}>
               <span style={{ fontSize: 11, color: isToday ? s.accent : hasTrade ? s.text : s.muted, fontWeight: isToday ? 700 : 400 }}>{day}</span>
-{dd && (
-  <div
-    style={{
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "flex-start",
-      gap: 2,
-      lineHeight: 1.15,
-      width: "100%"
-    }}
-  >
-    {showKrwMode ? (
-      <span
-        style={{
-          fontFamily: "'JetBrains Mono',monospace",
-          fontSize: 11,
-          fontWeight: 700,
-          color: krwTotal >= 0 ? s.green : s.red,
-          wordBreak: "break-all"
-        }}
-      >
-        {fmtShort(krwTotal, "₩")}
-      </span>
-    ) : (
-      Object.entries(dd.byCurrency)
-        .filter(([_, val]) => val !== 0)
-        .map(([cur, val]) => (
-          <span
-            key={cur}
-            style={{
-              fontFamily: "'JetBrains Mono',monospace",
-              fontSize: 10,
-              fontWeight: 700,
-              color: val >= 0 ? s.green : s.red,
-              wordBreak: "break-all"
-            }}
-          >
-            {fmtShort(val, cur)}
-          </span>
-        ))
-    )}
-  </div>
-)}
+              {dd && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2, lineHeight: 1.15, width: "100%" }}>
+                  {showKrwMode ? (
+                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 700, color: krwTotal >= 0 ? s.green : s.red, wordBreak: "break-all" }}>
+                      {fmtShort(krwTotal, "₩")}
+                    </span>
+                  ) : (
+                    Object.entries(dd.byCurrency)
+                      .filter(([_, val]) => val !== 0)
+                      .map(([cur, val]) => (
+                        <span key={cur} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, fontWeight: 700, color: val >= 0 ? s.green : s.red, wordBreak: "break-all" }}>
+                          {fmtShort(val, cur)}
+                        </span>
+                      ))
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
