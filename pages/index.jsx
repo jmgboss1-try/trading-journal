@@ -1057,6 +1057,7 @@ function HistoryTab({ trades, onDelete, onEdit, setModal, activeAssets, tickerCo
   const [addLegTarget, setAddLegTarget] = useState(null);
   const [livePrices, setLivePrices] = useState({});
   const [codeInputs, setCodeInputs] = useState({});
+  const [showClosedSection, setShowClosedSection] = useState(false);
   const set = (k, v) => setFilter(f => ({ ...f, [k]: v }));
 
   const getPriceType = (t) => {
@@ -1150,116 +1151,141 @@ function HistoryTab({ trades, onDelete, onEdit, setModal, activeAssets, tickerCo
         <select value={filter.result} onChange={e => set("result", e.target.value)}><option value="">전체 결과</option><option value="win">수익</option><option value="loss">손실</option></select>
         <input placeholder="종목 검색..." value={filter.symbol} onChange={e => set("symbol", e.target.value)} />
       </div>
-      <div style={{ fontSize: 12, color: s.muted }}>총 {filtered.length}건</div>
-      {filtered.length === 0
-        ? <Card><div style={{ textAlign: "center", color: s.muted, padding: "32px 0", fontSize: 13 }}>해당하는 거래가 없습니다</div></Card>
-        : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {filtered.map(t => (
-              <Card key={t.id} style={{ padding: 12 }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  <div style={{ flex: 1 }} onClick={() => setModal({ title: t.symbol, content: <TradeDetail t={t} onEdit={(updated) => { onEdit(updated); setModal(null); }} /> })}>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: 700, fontSize: 15 }}>{t.symbol}</span>
-                      <Badge type={t.dir} />
-                      {t.lev > 1 && <span style={{ fontSize: 10, color: s.muted }}>{t.lev}x</span>}
-                      {t.status === "홀딩" && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 8, background: "rgba(255,224,102,0.15)", color: s.accent3, border: "1px solid rgba(255,224,102,0.3)", fontWeight: 700 }}>홀딩중</span>}
-                      {t.status === "부분청산" && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 8, background: "rgba(0,229,255,0.1)", color: s.accent, border: "1px solid rgba(0,229,255,0.2)", fontWeight: 700 }}>부분청산</span>}
-                    </div>
-                    <div style={{ fontSize: 11, color: s.muted, marginBottom: 6 }}>{t.date} • {t.assetKey}</div>
-                    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                      <div><div style={{ fontSize: 10, color: s.muted }}>진입가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{t.entry?.toLocaleString()}</div></div>
-                      {(() => {
-                        const totalE = t.entries ? t.entries.reduce((a, e) => a + (e.qty || 0), 0) : (t.qty || 0);
-                        const totalX = t.exits ? t.exits.reduce((a, e) => a + (e.qty || 0), 0) : 0;
-                        const remaining = Math.max(0, totalE - totalX);
-                        return t.status === "청산"
-                          ? <div><div style={{ fontSize: 10, color: s.muted }}>총수량</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{totalE}</div></div>
-                          : <div><div style={{ fontSize: 10, color: s.muted }}>보유</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: s.accent3, fontWeight: 700 }}>{remaining}<span style={{ fontSize: 10, color: s.muted, fontWeight: 400 }}> / {totalE}</span></div></div>;
-                      })()}
-                      {t.exit && <div><div style={{ fontSize: 10, color: s.muted }}>청산가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{t.exit.toLocaleString()}</div></div>}
-                      {t.status !== "홀딩" && <>
-                        <div><div style={{ fontSize: 10, color: s.muted }}>손익</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700, color: t.pnl >= 0 ? s.green : s.red }}>{fmt(t.pnl, t.currency)}</div></div>
-                        <div><div style={{ fontSize: 10, color: s.muted }}>수익률</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: t.pct >= 0 ? s.green : s.red }}>{fmtPct(t.pct)}</div></div>
-                      </>}
-                    </div>
-                    {/* 추가 진입/청산 버튼 */}
-                    <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                      <button onClick={e => { e.stopPropagation(); setAddLegTarget({ trade: t, type: "entry" }); }} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(0,230,118,0.4)", background: "rgba(0,230,118,0.08)", color: s.green, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>+ 추가진입</button>
-                      <button onClick={e => { e.stopPropagation(); setAddLegTarget({ trade: t, type: "exit" }); }} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(255,61,113,0.4)", background: "rgba(255,61,113,0.08)", color: s.red, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>+ 청산추가</button>
-                      {/* 현재가 조회 버튼 - 홀딩/부분청산만 */}
-                      {(t.status === "홀딩" || t.status === "부분청산") && (
-                        <button onClick={e => { e.stopPropagation(); fetchPrice(t); }} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(123,47,255,0.4)", background: "rgba(123,47,255,0.08)", color: "#b47aff", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
-                          {livePrices[t.id]?.loading ? "조회중..." : "📡 현재가"}
-                        </button>
-                      )}
-                    </div>
 
-                    {/* 현재가 / 미실현 손익 표시 */}
-                    {livePrices[t.id] && !livePrices[t.id].loading && (
-                      <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
-                        {livePrices[t.id].needCode || livePrices[t.id].error === "종목코드 필요" ? (
-                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                            <input
-                              placeholder="종목코드 입력 (예: 005180)"
-                              value={codeInputs[t.symbol] || ""}
-                              onChange={e => setCodeInputs(c => ({ ...c, [t.symbol]: e.target.value }))}
-                              onKeyDown={e => e.key === "Enter" && saveCode(t)}
-                              style={{ flex: 1, fontSize: 12, padding: "6px 10px" }}
-                            />
-                            <button onClick={() => saveCode(t)} style={{ padding: "6px 12px", background: "#7b2fff", border: "none", color: "#fff", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>저장 후 조회</button>
-                          </div>
-                        ) : livePrices[t.id].error ? (
-                          <div style={{ fontSize: 11, color: s.red, padding: "4px 8px", background: "rgba(255,61,113,0.08)", borderRadius: 6 }}>⚠️ {livePrices[t.id].error}</div>
-                        ) : (() => {
-                          const cur = t.currency || "₩";
-                          const currentPrice = livePrices[t.id].price;
-                          const totalEQty = t.entries ? t.entries.reduce((a, e) => a + (e.qty || 0), 0) : (t.qty || 0);
-                          const totalXQty = t.exits ? t.exits.reduce((a, e) => a + (e.qty || 0), 0) : 0;
-                          const holdingQty = Math.max(0, totalEQty - totalXQty);
-                          const dir = t.dir || "롱";
-                          const unrealized = (dir === "숏" ? (t.entry - currentPrice) : (currentPrice - t.entry)) * holdingQty * (t.lev || 1);
-                          const unrealizedPct = t.entry > 0 ? ((dir === "숏" ? (t.entry - currentPrice) : (currentPrice - t.entry)) / t.entry) * 100 * (t.lev || 1) : 0;
-                          return (
-                            <div style={{ padding: "8px 12px", background: unrealized >= 0 ? "rgba(0,230,118,0.08)" : "rgba(255,61,113,0.08)", border: "1px solid " + (unrealized >= 0 ? "rgba(0,230,118,0.25)" : "rgba(255,61,113,0.25)"), borderRadius: 8, display: "flex", gap: 16, flexWrap: "wrap" }}>
-                              <div><div style={{ fontSize: 9, color: s.muted }}>현재가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700 }}>{currentPrice.toLocaleString()}</div></div>
-                              <div><div style={{ fontSize: 9, color: s.muted }}>미실현 손익</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, color: unrealized >= 0 ? s.green : s.red }}>{fmt(Math.round(unrealized), cur)}</div></div>
-                              <div><div style={{ fontSize: 9, color: s.muted }}>수익률</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, color: unrealizedPct >= 0 ? s.green : s.red }}>{fmtPct(unrealizedPct)}</div></div>
-                              <div><div style={{ fontSize: 9, color: s.muted }}>보유수량</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{holdingQty}</div></div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
+      {(() => {
+        const activeFiltered = filtered.filter(t => t.status === "홀딩" || t.status === "부분청산");
+        const closedFiltered = filtered.filter(t => t.status === "청산");
 
-                    {t.emotion && <div style={{ marginTop: 6, fontSize: 11, color: s.muted }}>{t.emotion}</div>}
-                  </div>
-
-                  {/* 수정/삭제 버튼 */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
-                    {confirmId === t.id ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-                        <div style={{ fontSize: 11, color: s.muted, marginBottom: 2 }}>삭제할까요?</div>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button onClick={() => { onDelete(t.id); setConfirmId(null); }} style={{ background: s.red, border: "none", color: "#fff", padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>삭제</button>
-                          <button onClick={() => setConfirmId(null)} style={{ background: s.surface2, border: "1px solid " + s.border, color: s.muted, padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>취소</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <button onClick={() => setEditTarget(t)} style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: s.accent, width: 28, height: 28, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><PenLine size={13} /></button>
-                        <button onClick={() => setConfirmId(t.id)} style={{ background: "rgba(255,61,113,0.1)", border: "1px solid rgba(255,61,113,0.3)", color: s.red, width: 28, height: 28, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={13} /></button>
-                      </>
-                    )}
-                  </div>
+        const TradeCard = (t) => (
+          <Card key={t.id} style={{ padding: 12 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <div style={{ flex: 1 }} onClick={() => setModal({ title: t.symbol, content: <TradeDetail t={t} onEdit={(updated) => { onEdit(updated); setModal(null); }} /> })}>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{t.symbol}</span>
+                  <Badge type={t.dir} />
+                  {t.lev > 1 && <span style={{ fontSize: 10, color: s.muted }}>{t.lev}x</span>}
+                  {t.status === "홀딩" && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 8, background: "rgba(255,224,102,0.15)", color: s.accent3, border: "1px solid rgba(255,224,102,0.3)", fontWeight: 700 }}>홀딩중</span>}
+                  {t.status === "부분청산" && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 8, background: "rgba(0,229,255,0.1)", color: s.accent, border: "1px solid rgba(0,229,255,0.2)", fontWeight: 700 }}>부분청산</span>}
                 </div>
-              </Card>
-            ))}
-          </div>
-        )
-      }
+                <div style={{ fontSize: 11, color: s.muted, marginBottom: 6 }}>{t.date} • {t.assetKey}</div>
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                  <div><div style={{ fontSize: 10, color: s.muted }}>진입가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{t.entry?.toLocaleString()}</div></div>
+                  {(() => {
+                    const totalE = t.entries ? t.entries.reduce((a, e) => a + (e.qty || 0), 0) : (t.qty || 0);
+                    const totalX = t.exits ? t.exits.reduce((a, e) => a + (e.qty || 0), 0) : 0;
+                    const remaining = Math.max(0, totalE - totalX);
+                    return t.status === "청산"
+                      ? <div><div style={{ fontSize: 10, color: s.muted }}>총수량</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{totalE}</div></div>
+                      : <div><div style={{ fontSize: 10, color: s.muted }}>보유</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: s.accent3, fontWeight: 700 }}>{remaining}<span style={{ fontSize: 10, color: s.muted, fontWeight: 400 }}> / {totalE}</span></div></div>;
+                  })()}
+                  {t.exit && <div><div style={{ fontSize: 10, color: s.muted }}>청산가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{t.exit.toLocaleString()}</div></div>}
+                  {t.status !== "홀딩" && <>
+                    <div><div style={{ fontSize: 10, color: s.muted }}>손익</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700, color: t.pnl >= 0 ? s.green : s.red }}>{fmt(t.pnl, t.currency)}</div></div>
+                    <div><div style={{ fontSize: 10, color: s.muted }}>수익률</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: t.pct >= 0 ? s.green : s.red }}>{fmtPct(t.pct)}</div></div>
+                  </>}
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                  <button onClick={e => { e.stopPropagation(); setAddLegTarget({ trade: t, type: "entry" }); }} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(0,230,118,0.4)", background: "rgba(0,230,118,0.08)", color: s.green, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>+ 추가진입</button>
+                  <button onClick={e => { e.stopPropagation(); setAddLegTarget({ trade: t, type: "exit" }); }} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(255,61,113,0.4)", background: "rgba(255,61,113,0.08)", color: s.red, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>+ 청산추가</button>
+                  {(t.status === "홀딩" || t.status === "부분청산") && (
+                    <button onClick={e => { e.stopPropagation(); fetchPrice(t); }} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(123,47,255,0.4)", background: "rgba(123,47,255,0.08)", color: "#b47aff", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
+                      {livePrices[t.id]?.loading ? "조회중..." : "📡 현재가"}
+                    </button>
+                  )}
+                </div>
+                {livePrices[t.id] && !livePrices[t.id].loading && (
+                  <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>
+                    {livePrices[t.id].needCode ? (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input placeholder="종목코드 입력 (예: 005180)" value={codeInputs[t.symbol] || ""} onChange={e => setCodeInputs(c => ({ ...c, [t.symbol]: e.target.value }))} onKeyDown={e => e.key === "Enter" && saveCode(t)} style={{ flex: 1, fontSize: 12, padding: "6px 10px" }} />
+                        <button onClick={() => saveCode(t)} style={{ padding: "6px 12px", background: "#7b2fff", border: "none", color: "#fff", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>저장 후 조회</button>
+                      </div>
+                    ) : livePrices[t.id].error ? (
+                      <div style={{ fontSize: 11, color: s.red, padding: "4px 8px", background: "rgba(255,61,113,0.08)", borderRadius: 6 }}>⚠️ {livePrices[t.id].error}</div>
+                    ) : (() => {
+                      const cur = t.currency || "₩";
+                      const currentPrice = livePrices[t.id].price;
+                      const totalEQty = t.entries ? t.entries.reduce((a, e) => a + (e.qty || 0), 0) : (t.qty || 0);
+                      const totalXQty = t.exits ? t.exits.reduce((a, e) => a + (e.qty || 0), 0) : 0;
+                      const holdingQty = Math.max(0, totalEQty - totalXQty);
+                      const dir = t.dir || "롱";
+                      const unrealized = (dir === "숏" ? (t.entry - currentPrice) : (currentPrice - t.entry)) * holdingQty * (t.lev || 1);
+                      const unrealizedPct = t.entry > 0 ? ((dir === "숏" ? (t.entry - currentPrice) : (currentPrice - t.entry)) / t.entry) * 100 * (t.lev || 1) : 0;
+                      return (
+                        <div style={{ padding: "8px 12px", background: unrealized >= 0 ? "rgba(0,230,118,0.08)" : "rgba(255,61,113,0.08)", border: "1px solid " + (unrealized >= 0 ? "rgba(0,230,118,0.25)" : "rgba(255,61,113,0.25)"), borderRadius: 8, display: "flex", gap: 16, flexWrap: "wrap" }}>
+                          <div><div style={{ fontSize: 9, color: s.muted }}>현재가</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700 }}>{currentPrice.toLocaleString()}</div></div>
+                          <div><div style={{ fontSize: 9, color: s.muted }}>미실현 손익</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, color: unrealized >= 0 ? s.green : s.red }}>{fmt(Math.round(unrealized), cur)}</div></div>
+                          <div><div style={{ fontSize: 9, color: s.muted }}>수익률</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, color: unrealizedPct >= 0 ? s.green : s.red }}>{fmtPct(unrealizedPct)}</div></div>
+                          <div><div style={{ fontSize: 9, color: s.muted }}>보유수량</div><div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>{holdingQty}</div></div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+                {t.emotion && <div style={{ marginTop: 6, fontSize: 11, color: s.muted }}>{t.emotion}</div>}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+                {confirmId === t.id ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+                    <div style={{ fontSize: 11, color: s.muted, marginBottom: 2 }}>삭제할까요?</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => { onDelete(t.id); setConfirmId(null); }} style={{ background: s.red, border: "none", color: "#fff", padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>삭제</button>
+                      <button onClick={() => setConfirmId(null)} style={{ background: s.surface2, border: "1px solid " + s.border, color: s.muted, padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>취소</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <button onClick={() => setEditTarget(t)} style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: s.accent, width: 28, height: 28, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><PenLine size={13} /></button>
+                    <button onClick={() => setConfirmId(t.id)} style={{ background: "rgba(255,61,113,0.1)", border: "1px solid rgba(255,61,113,0.3)", color: s.red, width: 28, height: 28, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={13} /></button>
+                  </>
+                )}
+              </div>
+            </div>
+          </Card>
+        );
+
+        return (
+          <>
+            {/* ── 현재 포지션 섹션 ── */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.accent3, boxShadow: "0 0 6px " + s.accent3 }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: s.text }}>현재 포지션</span>
+                <span style={{ fontSize: 12, color: s.accent3, fontWeight: 700 }}>{activeFiltered.length}건</span>
+              </div>
+            </div>
+            {activeFiltered.length === 0
+              ? <Card><div style={{ textAlign: "center", color: s.muted, padding: "20px 0", fontSize: 13 }}>현재 보유 중인 포지션이 없습니다</div></Card>
+              : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{activeFiltered.map(t => TradeCard(t))}</div>
+            }
+
+            {/* ── 청산 완료 섹션 ── */}
+            <button onClick={() => setShowClosedSection(v => !v)} style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              width: "100%", background: s.surface2, border: "1px solid " + s.border,
+              borderRadius: 10, padding: "12px 16px", cursor: "pointer", marginTop: 4
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.muted }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: s.muted }}>청산 완료</span>
+                <span style={{ fontSize: 12, color: s.muted }}>{closedFiltered.length}건</span>
+              </div>
+              <span style={{ fontSize: 13, color: s.muted }}>{showClosedSection ? "▲ 접기" : "▼ 펼치기"}</span>
+            </button>
+            {showClosedSection && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {closedFiltered.length === 0
+                  ? <Card><div style={{ textAlign: "center", color: s.muted, padding: "20px 0", fontSize: 13 }}>청산된 거래가 없습니다</div></Card>
+                  : closedFiltered.map(t => TradeCard(t))
+                }
+              </div>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
+
 }
 
 function AddLegForm({ trade, type, onSave, onCancel }) {
