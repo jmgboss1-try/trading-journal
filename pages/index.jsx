@@ -1445,14 +1445,19 @@ function CalendarHeatmap({ trades, krwRate, showKrwMode }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
+  const [selectedDay, setSelectedDay] = useState(null); // 클릭된 날짜
 
   // 손익을 각 청산 leg의 날짜별로 분배해서 집계
   const dayMap = {};
-  const addToDay = (dateKey, pnl, cur) => {
+  const addToDay = (dateKey, pnl, cur, tradeRef) => {
     if (!dateKey || !pnl) return;
-    if (!dayMap[dateKey]) dayMap[dateKey] = { pnl: 0, count: 0, byCurrency: {} };
+    if (!dayMap[dateKey]) dayMap[dateKey] = { pnl: 0, count: 0, byCurrency: {}, items: [] };
     dayMap[dateKey].pnl += pnl;
     dayMap[dateKey].byCurrency[cur] = (dayMap[dateKey].byCurrency[cur] || 0) + pnl;
+    // 같은 거래가 중복 추가 안 되게
+    if (tradeRef && !dayMap[dateKey].items.find(i => i.id === tradeRef.id && i.exitIdx === tradeRef.exitIdx)) {
+      dayMap[dateKey].items.push(tradeRef);
+    }
   };
 
   trades.forEach(t => {
@@ -1464,25 +1469,26 @@ function CalendarHeatmap({ trades, krwRate, showKrwMode }) {
 
     // exit leg이 있으면 각 leg별로 손익 계산해서 날짜에 분배
     if (t.exits && t.exits.length > 0 && avgEntry > 0) {
-      t.exits.forEach(ex => {
+      t.exits.forEach((ex, exIdx) => {
         if (!ex.date || !ex.qty || !ex.price) return;
         const legPnl = (dir === "숏"
           ? (avgEntry - ex.price) * ex.qty * lev
           : (ex.price - avgEntry) * ex.qty * lev);
         const legPnlRounded = Math.round(legPnl * 100) / 100;
-        addToDay(ex.date, legPnlRounded, cur);
+        const legPct = avgEntry > 0 ? Math.round((dir === "숏" ? (avgEntry - ex.price) : (ex.price - avgEntry)) / avgEntry * 100 * lev * 100) / 100 : 0;
+        addToDay(ex.date, legPnlRounded, cur, { id: t.id + "_" + exIdx, symbol: t.symbol, pnl: legPnlRounded, cur, exitPrice: ex.price, qty: ex.qty, dir, lev, assetKey: t.assetKey, pct: legPct });
       });
-      // 당일 count는 거래 단위로 1회만 (마지막 exit 날짜에)
       const lastDate = t.exits[t.exits.length - 1].date;
       if (lastDate && dayMap[lastDate]) dayMap[lastDate].count += 1;
     } else {
       // exit 정보 없는 구형 데이터는 기존 방식대로
       const dateKey = t.date;
       if (!dateKey) return;
-      if (!dayMap[dateKey]) dayMap[dateKey] = { pnl: 0, count: 0, byCurrency: {} };
+      if (!dayMap[dateKey]) dayMap[dateKey] = { pnl: 0, count: 0, byCurrency: {}, items: [] };
       dayMap[dateKey].pnl += t.pnl;
       dayMap[dateKey].count += 1;
       dayMap[dateKey].byCurrency[cur] = (dayMap[dateKey].byCurrency[cur] || 0) + t.pnl;
+      dayMap[dateKey].items.push({ id: t.id + "_legacy", symbol: t.symbol, pnl: t.pnl, cur, exitPrice: t.exit, qty: t.qty, dir, lev, assetKey: t.assetKey, pct: t.pct });
     }
   });
   const firstDay = new Date(year, month, 1).getDay();
@@ -1527,6 +1533,7 @@ function CalendarHeatmap({ trades, krwRate, showKrwMode }) {
   };
 
   return (
+    <>
     <Card>
       {/* 헤더: 월 이동 + 이달 총 손익 */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -1574,11 +1581,11 @@ function CalendarHeatmap({ trades, krwRate, showKrwMode }) {
           const isLoss = dd && (showKrwMode ? krwTotal < 0 : dd.pnl < 0);
 
           return (
-            <div key={day} className="cal-cell" style={{
+            <div key={day} className="cal-cell" onClick={() => dd && setSelectedDay({ date: ds, dd })} style={{
               background: isProfit ? "rgba(0,230,118,0.1)" : isLoss ? "rgba(255,61,113,0.1)" : s.surface2,
               borderRadius: 5, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "space-between",
               border: "1px solid " + (isToday ? s.accent : isProfit ? "rgba(0,230,118,0.3)" : isLoss ? "rgba(255,61,113,0.3)" : s.border),
-              padding: "4px 5px",
+              padding: "4px 5px", cursor: dd ? "pointer" : "default",
             }}>
               <span style={{ fontSize: 11, color: isToday ? s.accent : hasTrade ? s.text : s.muted, fontWeight: isToday ? 700 : 400 }}>{day}</span>
               {dd && (
@@ -1603,6 +1610,48 @@ function CalendarHeatmap({ trades, krwRate, showKrwMode }) {
         })}
       </div>
     </Card>
+
+    {/* 날짜 클릭 상세 모달 */}
+    {selectedDay && (
+      <div onClick={() => setSelectedDay(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div onClick={e => e.stopPropagation()} style={{ background: s.surface, border: "1px solid " + s.border, borderRadius: 16, padding: 24, width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>{selectedDay.date}</div>
+              <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>
+                {Object.entries(selectedDay.dd.byCurrency).map(([cur, val]) => (
+                  <span key={cur} style={{ marginRight: 8, color: val >= 0 ? s.green : s.red, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700 }}>{fmt(Math.round(val * 100) / 100, cur)}</span>
+                ))}
+              </div>
+            </div>
+            <button onClick={() => setSelectedDay(null)} style={{ background: s.surface2, border: "1px solid " + s.border, color: s.text, width: 32, height: 32, borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {(selectedDay.dd.items || []).map((item, i) => (
+              <div key={i} style={{ padding: "12px 14px", background: s.surface2, borderRadius: 10, border: "1px solid " + (item.pnl >= 0 ? "rgba(0,230,118,0.2)" : "rgba(255,61,113,0.2)") }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                  <div>
+                    <span style={{ fontWeight: 700, fontSize: 15 }}>{item.symbol}</span>
+                    {item.dir && <span style={{ marginLeft: 6, fontSize: 11, padding: "1px 6px", borderRadius: 8, background: item.dir === "롱" ? "rgba(0,230,118,0.15)" : "rgba(255,61,113,0.15)", color: item.dir === "롱" ? s.green : s.red, border: "1px solid " + (item.dir === "롱" ? "rgba(0,230,118,0.3)" : "rgba(255,61,113,0.3)"), fontWeight: 700 }}>{item.dir}</span>}
+                    {item.lev > 1 && <span style={{ marginLeft: 4, fontSize: 10, color: s.muted }}>{item.lev}x</span>}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 15, fontWeight: 700, color: item.pnl >= 0 ? s.green : s.red }}>{fmt(item.pnl, item.cur)}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: item.pct >= 0 ? s.green : s.red }}>{fmtPct(item.pct)}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 14, fontSize: 11, color: s.muted }}>
+                  {item.exitPrice && <span>청산가 <span style={{ fontFamily: "'JetBrains Mono',monospace", color: s.text }}>{item.exitPrice.toLocaleString()}</span></span>}
+                  {item.qty && <span>수량 <span style={{ fontFamily: "'JetBrains Mono',monospace", color: s.text }}>{item.qty}</span></span>}
+                  {item.assetKey && <span style={{ color: s.muted }}>{item.assetKey}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
