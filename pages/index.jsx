@@ -1446,23 +1446,44 @@ function CalendarHeatmap({ trades, krwRate, showKrwMode }) {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
 
-  // 손익을 청산일 기준으로 집계 (진입일 아님)
+  // 손익을 각 청산 leg의 날짜별로 분배해서 집계
   const dayMap = {};
-  trades.forEach(t => {
-    if (!t.pnl || t.pnl === 0) return; // 홀딩 중인 건 제외
-    const cur = t.currency || "₩";
-
-    // 마지막 청산 날짜 추출
-    let dateKey = t.date; // 기본값: 진입일
-    if (t.exits && t.exits.length > 0) {
-      const lastExit = t.exits[t.exits.length - 1];
-      if (lastExit.date) dateKey = lastExit.date;
-    }
-    if (!dateKey) return;
+  const addToDay = (dateKey, pnl, cur) => {
+    if (!dateKey || !pnl) return;
     if (!dayMap[dateKey]) dayMap[dateKey] = { pnl: 0, count: 0, byCurrency: {} };
-    dayMap[dateKey].pnl += t.pnl;
-    dayMap[dateKey].count += 1;
-    dayMap[dateKey].byCurrency[cur] = (dayMap[dateKey].byCurrency[cur] || 0) + t.pnl;
+    dayMap[dateKey].pnl += pnl;
+    dayMap[dateKey].byCurrency[cur] = (dayMap[dateKey].byCurrency[cur] || 0) + pnl;
+  };
+
+  trades.forEach(t => {
+    if (!t.pnl || t.pnl === 0) return;
+    const cur = t.currency || "₩";
+    const dir = t.dir || "롱";
+    const lev = t.lev || 1;
+    const avgEntry = t.entry || 0;
+
+    // exit leg이 있으면 각 leg별로 손익 계산해서 날짜에 분배
+    if (t.exits && t.exits.length > 0 && avgEntry > 0) {
+      t.exits.forEach(ex => {
+        if (!ex.date || !ex.qty || !ex.price) return;
+        const legPnl = (dir === "숏"
+          ? (avgEntry - ex.price) * ex.qty * lev
+          : (ex.price - avgEntry) * ex.qty * lev);
+        const legPnlRounded = Math.round(legPnl * 100) / 100;
+        addToDay(ex.date, legPnlRounded, cur);
+      });
+      // 당일 count는 거래 단위로 1회만 (마지막 exit 날짜에)
+      const lastDate = t.exits[t.exits.length - 1].date;
+      if (lastDate && dayMap[lastDate]) dayMap[lastDate].count += 1;
+    } else {
+      // exit 정보 없는 구형 데이터는 기존 방식대로
+      const dateKey = t.date;
+      if (!dateKey) return;
+      if (!dayMap[dateKey]) dayMap[dateKey] = { pnl: 0, count: 0, byCurrency: {} };
+      dayMap[dateKey].pnl += t.pnl;
+      dayMap[dateKey].count += 1;
+      dayMap[dateKey].byCurrency[cur] = (dayMap[dateKey].byCurrency[cur] || 0) + t.pnl;
+    }
   });
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -1596,13 +1617,29 @@ function StatsTab({ trades, krwRate, showKrwMode }) {
   const monthly = {};
   closedTrades.forEach(t => {
     if (!t.pnl || t.pnl === 0) return;
-    let dateKey = t.date;
-    if (t.exits && t.exits.length > 0 && t.exits[t.exits.length - 1].date) {
-      dateKey = t.exits[t.exits.length - 1].date;
+    const cur = t.currency || "₩";
+    const dir = t.dir || "롱";
+    const lev = t.lev || 1;
+    const avgEntry = t.entry || 0;
+
+    if (t.exits && t.exits.length > 0 && avgEntry > 0) {
+      // 각 exit leg별로 손익 계산해서 해당 월에 분배
+      t.exits.forEach(ex => {
+        if (!ex.date || !ex.qty || !ex.price) return;
+        const legPnl = (dir === "숏"
+          ? (avgEntry - ex.price) * ex.qty * lev
+          : (ex.price - avgEntry) * ex.qty * lev);
+        const m = ex.date.substring(0, 7);
+        const krwPnl = toKrwVal(legPnl, cur);
+        if (m) monthly[m] = (monthly[m] || 0) + krwPnl;
+      });
+    } else {
+      // 구형 데이터
+      const dateKey = t.date;
+      const m = dateKey && dateKey.substring(0, 7);
+      const krwPnl = toKrwVal(t.pnl, cur);
+      if (m) monthly[m] = (monthly[m] || 0) + krwPnl;
     }
-    const m = dateKey && dateKey.substring(0, 7);
-    const krwPnl = toKrwVal(t.pnl, t.currency || "₩");
-    if (m) monthly[m] = (monthly[m] || 0) + krwPnl;
   });
   const monthData = Object.keys(monthly).sort().map(k => ({ month: k.substring(5), pnl: Math.round(monthly[k]) }));
   const emotionMap = {};
