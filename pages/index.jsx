@@ -1052,6 +1052,8 @@ function RecordTab({ onAdd, strategies, activeAssets }) {
 function HistoryTab({ trades, onDelete, onEdit, setModal, activeAssets, tickerCodes, onSaveTickerCodes }) {
   const visibleAssetKeys = ASSET_KEYS.filter(k => !activeAssets || activeAssets.includes(k));
   const [filter, setFilter] = useState({ asset: "", dir: "", result: "", symbol: "" });
+  const [sortBy, setSortBy] = useState("date_desc"); // date_desc | date_asc | pnl_desc | pnl_asc | symbol_asc
+  const [assetTab, setAssetTab] = useState("전체"); // 전체 | 국내주식 | 해외주식 | 암호화폐(현물) | 암호화폐(선물)
   const [confirmId, setConfirmId] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
   const [addLegTarget, setAddLegTarget] = useState(null);
@@ -1097,12 +1099,20 @@ function HistoryTab({ trades, onDelete, onEdit, setModal, activeAssets, tickerCo
   };
 
   const filtered = trades.filter(t => {
+    if (assetTab !== "전체" && t.assetKey !== assetTab) return false;
     if (filter.asset && t.assetKey !== filter.asset) return false;
     if (filter.dir && t.dir !== filter.dir) return false;
     if (filter.result === "win" && t.pnl <= 0) return false;
     if (filter.result === "loss" && t.pnl >= 0) return false;
     if (filter.symbol && !t.symbol.toLowerCase().includes(filter.symbol.toLowerCase())) return false;
     return true;
+  }).sort((a, b) => {
+    if (sortBy === "date_desc") return new Date(b.date) - new Date(a.date);
+    if (sortBy === "date_asc") return new Date(a.date) - new Date(b.date);
+    if (sortBy === "pnl_desc") return b.pnl - a.pnl;
+    if (sortBy === "pnl_asc") return a.pnl - b.pnl;
+    if (sortBy === "symbol_asc") return a.symbol.localeCompare(b.symbol, "ko");
+    return 0;
   });
 
   const handleAddLeg = (trade, type, leg) => {
@@ -1145,11 +1155,39 @@ function HistoryTab({ trades, onDelete, onEdit, setModal, activeAssets, tickerCo
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, animation: "fadeIn 0.3s ease" }}>
+
+      {/* 자산 탭 */}
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" }}>
+        {["전체", ...visibleAssetKeys].map(key => {
+          const labels = { "전체": "전체", "국내주식": "🇰🇷 국내", "해외주식": "🌍 해외", "암호화폐(현물)": "₿ 현물", "암호화폐(선물)": "📈 선물" };
+          const count = key === "전체" ? trades.length : trades.filter(t => t.assetKey === key).length;
+          const isActive = assetTab === key;
+          return (
+            <button key={key} onClick={() => setAssetTab(key)} style={{
+              padding: "6px 14px", borderRadius: 20, border: "1px solid " + (isActive ? s.accent : s.border),
+              background: isActive ? "rgba(0,229,255,0.1)" : s.surface2,
+              color: isActive ? s.accent : s.muted, fontSize: 12, fontWeight: isActive ? 700 : 400,
+              cursor: "pointer", whiteSpace: "nowrap", fontFamily: "'Noto Sans KR', sans-serif",
+              flexShrink: 0
+            }}>
+              {labels[key] || key} <span style={{ opacity: 0.6 }}>{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 필터 + 정렬 */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <select value={filter.asset} onChange={e => set("asset", e.target.value)}><option value="">전체 자산</option>{visibleAssetKeys.map(k => <option key={k} value={k}>{k}</option>)}</select>
         <select value={filter.dir} onChange={e => set("dir", e.target.value)}><option value="">전체 방향</option><option value="롱">롱</option><option value="숏">숏</option></select>
         <select value={filter.result} onChange={e => set("result", e.target.value)}><option value="">전체 결과</option><option value="win">수익</option><option value="loss">손실</option></select>
         <input placeholder="종목 검색..." value={filter.symbol} onChange={e => set("symbol", e.target.value)} />
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
+          <option value="date_desc">최신순</option>
+          <option value="date_asc">오래된순</option>
+          <option value="pnl_desc">수익 높은순</option>
+          <option value="pnl_asc">수익 낮은순</option>
+          <option value="symbol_asc">종목명 가나다순</option>
+        </select>
       </div>
 
       {(() => {
