@@ -1804,6 +1804,81 @@ function StatsTab({ trades, krwRate, showKrwMode }) {
         </Card>
       )}
 
+      {/* 종목 랭킹 */}
+      {closedTrades.length > 0 && (() => {
+        const symbolMap = {};
+        closedTrades.forEach(t => {
+          if (!symbolMap[t.symbol]) symbolMap[t.symbol] = { symbol: t.symbol, assetKey: t.assetKey, cur: t.currency || "₩", trades: 0, wins: 0, totalPnl: 0, totalPnlKrw: 0, pcts: [] };
+          symbolMap[t.symbol].trades++;
+          if (t.pnl > 0) symbolMap[t.symbol].wins++;
+          symbolMap[t.symbol].totalPnl += t.pnl;
+          symbolMap[t.symbol].totalPnlKrw += toKrwVal(t.pnl, t.currency || "₩");
+          symbolMap[t.symbol].pcts.push(t.pct);
+        });
+        const symbolList = Object.values(symbolMap).map(s => ({
+          ...s,
+          wr: Math.round(s.wins / s.trades * 100),
+          avgPct: s.pcts.reduce((a, b) => a + b, 0) / s.pcts.length
+        }));
+
+        const [rankSort, setRankSort] = useState("pnl");
+        const sorted = [...symbolList].sort((a, b) => {
+          if (rankSort === "pnl") return b.totalPnlKrw - a.totalPnlKrw;
+          if (rankSort === "pct") return b.avgPct - a.avgPct;
+          if (rankSort === "wr") return b.wr - a.wr;
+          return 0;
+        });
+        const medals = ["🥇", "🥈", "🥉"];
+
+        return (
+          <Card accent={s.green}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: s.green, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                <TrendingUp size={13} /> 종목 랭킹
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[["pnl", "수익금"], ["pct", "수익률"], ["wr", "승률"]].map(([key, label]) => (
+                  <button key={key} onClick={() => setRankSort(key)} style={{ padding: "3px 10px", borderRadius: 12, border: "1px solid " + (rankSort === key ? s.green : s.border), background: rankSort === key ? "rgba(0,230,118,0.12)" : "transparent", color: rankSort === key ? s.green : s.muted, fontSize: 11, cursor: "pointer", fontWeight: rankSort === key ? 700 : 400 }}>{label}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {sorted.map((item, idx) => {
+                const isTop3 = idx < 3;
+                const barPct = sorted[0].totalPnlKrw > 0 ? Math.max(0, (item.totalPnlKrw / sorted[0].totalPnlKrw) * 100) : 0;
+                return (
+                  <div key={item.symbol} style={{ padding: "10px 14px", background: isTop3 ? (idx === 0 ? "rgba(255,215,0,0.06)" : idx === 1 ? "rgba(192,192,192,0.06)" : "rgba(205,127,50,0.06)") : s.surface2, borderRadius: 10, border: "1px solid " + (isTop3 ? (idx === 0 ? "rgba(255,215,0,0.2)" : idx === 1 ? "rgba(192,192,192,0.15)" : "rgba(205,127,50,0.15)") : s.border) }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: isTop3 ? 16 : 13, lineHeight: 1 }}>{isTop3 ? medals[idx] : idx + 1}</span>
+                        <div>
+                          <span style={{ fontWeight: 700, fontSize: 14 }}>{item.symbol}</span>
+                          <span style={{ fontSize: 10, color: s.muted, marginLeft: 6 }}>{item.trades}건</span>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700, color: item.totalPnl >= 0 ? s.green : s.red }}>
+                          {showKrwMode ? fmt(Math.round(item.totalPnlKrw), "₩") : fmt(Math.round(item.totalPnl * 100) / 100, item.cur)}
+                        </div>
+                        <div style={{ fontSize: 11, color: s.muted, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          <span style={{ color: item.avgPct >= 0 ? s.green : s.red }}>{fmtPct(item.avgPct)}</span>
+                          <span style={{ color: item.wr >= 50 ? s.green : s.red }}>승률 {item.wr}%</span>
+                        </div>
+                      </div>
+                    </div>
+                    {rankSort === "pnl" && item.totalPnlKrw > 0 && (
+                      <div style={{ height: 3, background: s.border, borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: barPct + "%", background: "linear-gradient(90deg, " + s.green + ", " + s.accent + ")", borderRadius: 2 }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        );
+      })()}
+
       {/* 백테스팅 통계 */}
       {btTrades.length > 0 && (
         <Card accent={s.accent3}>
@@ -2355,7 +2430,20 @@ function CashflowTab({ cashflows, trades, onAdd, onDelete, activeAssets }) {
     amount: "", currency: "₩", memo: "", isProfit: false
   });
   const [confirmId, setConfirmId] = useState(null);
+  const [expandedMonths, setExpandedMonths] = useState({}); // { "2026-04": true }
+  const [viewMode, setViewMode] = useState("timeline"); // "timeline" | "monthly"
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // 월별 그룹화
+  const grouped = {};
+  [...cashflows].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(cf => {
+    const m = cf.date.substring(0, 7);
+    if (!grouped[m]) grouped[m] = { in: 0, out: 0, items: [] };
+    grouped[m].items.push(cf);
+    if (cf.type === "입금") grouped[m].in += cf.amount;
+    else grouped[m].out += cf.amount;
+  });
+  const monthKeys = Object.keys(grouped).sort().reverse();
 
   const handleAdd = () => {
     if (!form.amount) { alert("금액을 입력해주세요"); return; }
@@ -2542,35 +2630,109 @@ function CashflowTab({ cashflows, trades, onAdd, onDelete, activeAssets }) {
 
       {/* 입출금 내역 */}
       <Card>
-        <div style={{ fontSize: 11, color: s.muted, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><ClipboardList size={13} /> 입출금 내역</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: s.muted, display: "flex", alignItems: "center", gap: 6 }}><ClipboardList size={13} /> 입출금 내역</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {[["timeline", "타임라인"], ["monthly", "월별"]].map(([key, label]) => (
+              <button key={key} onClick={() => setViewMode(key)} style={{ padding: "3px 10px", borderRadius: 12, border: "1px solid " + (viewMode === key ? s.accent : s.border), background: viewMode === key ? "rgba(0,229,255,0.1)" : "transparent", color: viewMode === key ? s.accent : s.muted, fontSize: 11, cursor: "pointer", fontWeight: viewMode === key ? 700 : 400 }}>{label}</button>
+            ))}
+          </div>
+        </div>
+
         {cashflows.length === 0 ? (
           <div style={{ textAlign: "center", color: s.muted, padding: "32px 0", fontSize: 13 }}>입출금 기록이 없습니다</div>
+        ) : viewMode === "timeline" ? (
+          /* 타임라인 뷰 */
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {[...cashflows].sort((a, b) => new Date(b.date) - new Date(a.date)).map((cf, idx, arr) => {
+              const isLast = idx === arr.length - 1;
+              return (
+                <div key={cf.id} style={{ display: "flex", gap: 12 }}>
+                  {/* 타임라인 라인 */}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 32, flexShrink: 0 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid " + (cf.type === "입금" ? s.green : s.red), background: cf.type === "입금" ? "rgba(0,230,118,0.1)" : "rgba(255,61,113,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, zIndex: 1 }}>
+                      {cf.type === "입금" ? <ArrowDownCircle size={14} color={s.green} /> : <ArrowUpCircle size={14} color={s.red} />}
+                    </div>
+                    {!isLast && <div style={{ width: 2, flex: 1, background: s.border, minHeight: 16 }} />}
+                  </div>
+                  {/* 내용 */}
+                  <div style={{ flex: 1, paddingBottom: isLast ? 0 : 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 700, fontSize: 14, color: cf.type === "입금" ? s.green : s.red }}>
+                            {cf.type === "입금" ? "+" : "-"}{cf.amount.toLocaleString("ko-KR")} {cf.currency}
+                          </span>
+                          {cf.isProfit && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 8, background: "rgba(0,229,255,0.1)", color: s.accent, border: "1px solid rgba(0,229,255,0.2)" }}>수익출금</span>}
+                        </div>
+                        <div style={{ fontSize: 11, color: s.muted, marginTop: 2 }}>{cf.date} · {cf.accountKey}{cf.memo ? " · " + cf.memo : ""}</div>
+                      </div>
+                      {confirmId === cf.id ? (
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button onClick={() => { onDelete(cf.id); setConfirmId(null); }} style={{ background: s.red, border: "none", color: "#fff", padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 700 }}>삭제</button>
+                          <button onClick={() => setConfirmId(null)} style={{ background: s.surface2, border: "1px solid " + s.border, color: s.muted, padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 11 }}>취소</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setConfirmId(cf.id)} style={{ background: "rgba(255,61,113,0.1)", border: "1px solid rgba(255,61,113,0.3)", color: s.red, width: 26, height: 26, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Trash2 size={12} /></button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {cashflows.map(cf => (
-              <div key={cf.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: s.surface2, borderRadius: 8 }}>
-                <div style={{ color: cf.type === "입금" ? s.green : s.red, display: "flex", alignItems: "center" }}>
-                  {cf.type === "입금" ? <ArrowDownCircle size={18} /> : <ArrowUpCircle size={18} />}
+          /* 월별 접기 뷰 */
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {monthKeys.map(mk => {
+              const g = grouped[mk];
+              const net = g.in - g.out;
+              const isOpen = expandedMonths[mk];
+              return (
+                <div key={mk}>
+                  <button onClick={() => setExpandedMonths(prev => ({ ...prev, [mk]: !isOpen }))} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: s.surface2, border: "1px solid " + s.border, borderRadius: isOpen ? "10px 10px 0 0" : 10, cursor: "pointer" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, fontWeight: 700, color: s.text }}>{mk}</span>
+                      <span style={{ fontSize: 11, color: s.muted }}>{g.items.length}건</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                      <div style={{ textAlign: "right" }}>
+                        {g.in > 0 && <div style={{ fontSize: 11, color: s.green }}>+{g.in.toLocaleString()}₩</div>}
+                        {g.out > 0 && <div style={{ fontSize: 11, color: s.red }}>-{g.out.toLocaleString()}₩</div>}
+                        <div style={{ fontSize: 11, fontWeight: 700, color: net >= 0 ? s.green : s.red }}>순 {net >= 0 ? "+" : ""}{net.toLocaleString()}₩</div>
+                      </div>
+                      <span style={{ color: s.muted, fontSize: 12 }}>{isOpen ? "▲" : "▼"}</span>
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div style={{ border: "1px solid " + s.border, borderTop: "none", borderRadius: "0 0 10px 10px", overflow: "hidden" }}>
+                      {g.items.map((cf, i) => (
+                        <div key={cf.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: i % 2 === 0 ? s.surface : s.surface2, borderTop: i > 0 ? "1px solid " + s.border : "none" }}>
+                          <div style={{ color: cf.type === "입금" ? s.green : s.red }}>
+                            {cf.type === "입금" ? <ArrowDownCircle size={16} /> : <ArrowUpCircle size={16} />}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <span style={{ fontWeight: 700, fontSize: 13, color: cf.type === "입금" ? s.green : s.red }}>{cf.type === "입금" ? "+" : "-"}{cf.amount.toLocaleString()} {cf.currency}</span>
+                              {cf.isProfit && <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 6, background: "rgba(0,229,255,0.1)", color: s.accent }}>수익출금</span>}
+                            </div>
+                            <div style={{ fontSize: 11, color: s.muted }}>{cf.date} · {cf.accountKey}{cf.memo ? " · " + cf.memo : ""}</div>
+                          </div>
+                          {confirmId === cf.id ? (
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button onClick={() => { onDelete(cf.id); setConfirmId(null); }} style={{ background: s.red, border: "none", color: "#fff", padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 700 }}>삭제</button>
+                              <button onClick={() => setConfirmId(null)} style={{ background: s.surface, border: "1px solid " + s.border, color: s.muted, padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 11 }}>취소</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setConfirmId(cf.id)} style={{ background: "rgba(255,61,113,0.1)", border: "1px solid rgba(255,61,113,0.3)", color: s.red, width: 26, height: 26, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={12} /></button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 2 }}>
-                    <span style={{ fontWeight: 700, fontSize: 14, color: cf.type === "입금" ? s.green : s.red }}>
-                      {cf.type === "입금" ? "+" : "-"}{cf.amount.toLocaleString("ko-KR")} {cf.currency}
-                    </span>
-                    {cf.isProfit && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 8, background: "rgba(0,229,255,0.1)", color: s.accent, border: "1px solid rgba(0,229,255,0.2)" }}>수익출금</span>}
-                  </div>
-                  <div style={{ fontSize: 11, color: s.muted }}>{cf.date} · {cf.accountKey}{cf.memo ? " · " + cf.memo : ""}</div>
-                </div>
-                {confirmId === cf.id ? (
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => { onDelete(cf.id); setConfirmId(null); }} style={{ background: s.red, border: "none", color: "#fff", padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>삭제</button>
-                    <button onClick={() => setConfirmId(null)} style={{ background: s.surface, border: "1px solid " + s.border, color: s.muted, padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>취소</button>
-                  </div>
-                ) : (
-                  <button onClick={() => setConfirmId(cf.id)} style={{ background: "rgba(255,61,113,0.1)", border: "1px solid rgba(255,61,113,0.3)", color: s.red, width: 28, height: 28, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={13} /></button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
